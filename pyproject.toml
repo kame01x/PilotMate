@@ -1,0 +1,16 @@
+[project]
+name = "pilotmate"
+version = "0.1.0"
+description = "Training assistant app for student pilots and flight instructors"
+requires-python = ">=3.12"
+dependencies = [
+    "sqlalchemy>=2.0",
+    "python-dotenv>=1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = false
