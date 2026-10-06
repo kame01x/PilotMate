@@ -29,14 +29,17 @@ class GeminiChat:
             self._client = genai.Client(api_key=GEMINI_API_KEY)
             self._types = types
 
-    def _generate(self, config, attempts: int = 4):
+    def _generate(self, config, attempts: int = 5):
         for i in range(attempts):
             try:
                 return self._client.models.generate_content(model=self.model, contents=self.history, config=config)
             except Exception as exc:
-                if i == attempts - 1 or "503" not in str(exc) and "UNAVAILABLE" not in str(exc):
+                msg = str(exc)
+                transient = ("503" in msg or "UNAVAILABLE" in msg)
+                rate_limited = "429" in msg or "RESOURCE_EXHAUSTED" in msg
+                if i == attempts - 1 or not (transient or rate_limited):
                     raise
-                time.sleep(5 * (i + 1))
+                time.sleep(30 if rate_limited else 5 * (i + 1))
 
     def chat(self, message: str) -> str:
         if self._client is None:

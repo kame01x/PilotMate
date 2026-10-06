@@ -54,16 +54,23 @@ def save_debrief(flight_id: int, student_pk: int, student_reported_feedback: str
         session.close()
 
 
-def open_instructor_chat() -> dict:
-    # TODO(v2): wire to real instructor-side chat using the InstructorMessage model
-    # (from_id/to_id, from_type/to_type='instructor', timestamp, message_text, read_status).
-    # Deferred per docs/01-architecture.md: instructor chat is only reachable from Debrief
-    # and is placeholder-only in v1.
-    return {
-        "status": "placeholder",
-        "message": "Instructor chat becomes available after the debrief is saved. "
-                   "(v1 placeholder — wiring to InstructorMessage is deferred.)",
-    }
+def open_instructor_chat(student_pk: int) -> dict:
+    # Wired (Phase 5) to real InstructorMessage storage via agents/instructor.py:
+    # returns the linked instructor's conversation thread for this student.
+    session = SessionLocal()
+    try:
+        student = session.query(Student).filter_by(id=student_pk).first()
+        if student is None:
+            return {"error": "student not found"}
+        instructor_id = student.linked_instructor_id
+    finally:
+        session.close()
+    if instructor_id is None:
+        return {"status": "no_instructor_linked", "message": "No instructor is linked to this student yet."}
+    from agents.instructor import get_conversation
+
+    conversation = get_conversation(student_pk, instructor_id)
+    return {"status": "wired", "instructor_id": instructor_id, "conversation": conversation}
 
 
 def _build_tool_declarations():
@@ -97,7 +104,7 @@ def _build_tool_declarations():
         ),
         types.FunctionDeclaration(
             name="open_instructor_chat",
-            description="Open the instructor chat (v1 placeholder only)",
+            description="Open the instructor message thread for this student",
             parameters=types.Schema(type=types.Type.OBJECT, properties={}),
         ),
     ]
@@ -132,7 +139,7 @@ class DebriefAgent:
 
         impls = {
             "save_debrief": lambda **kw: save_debrief(flight_id=self._flight.id, student_pk=self._student_pk, **kw),
-            "open_instructor_chat": lambda: open_instructor_chat(),
+            "open_instructor_chat": lambda: open_instructor_chat(student_pk=self._student_pk),
         }
         self._chat = GeminiChat(self._system_prompt(), _build_tool_declarations(), impls)
 
@@ -163,7 +170,7 @@ Behavior:
 - You may reflect back patterns you notice (e.g. link to what was covered pre-flight), but NEVER deliver a performance verdict or diagnose the student. No clinical or absolute language. The instructor (human) makes authoritative judgments; v1 has no live instructor, so 'identified weak points' are draft suggestions only.
 - Do not speculate about psychology; ground coaching notes strictly in what the student actually said.
 - When the conversation has covered enough, call save_debrief with: student_reported_feedback (their own summary in their words), agent_conversation_log (structured list of question + student_answer_summary), identified_weak_points (short list, each phrased as a draft suggestion to confirm with the instructor), coaching_notes (constructive, actionable, tied to the discussion).
-- If the student opens instructor chat, call open_instructor_chat and share its placeholder message."""
+- If the student opens instructor chat, call open_instructor_chat and share the returned thread summary."""
 
     def chat(self, message: str) -> str:
         return self._chat.chat(message)

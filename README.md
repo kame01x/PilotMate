@@ -43,6 +43,14 @@ All configuration is read from `.env` at the project root:
 | `TAVILY_API_KEY` | — | Enables NOTAM/active-area web search tool. Without it, the tool returns a notice. |
 | `AVIOWIKI_API_KEY` | — | Optional token for Aviowiki airport lookups (unauthenticated calls work, rate-limited). |
 
+### Phase 5 test — Instructor (Part 2 v1)
+
+```bash
+uv run python scripts/test_instructor.py
+```
+
+Links a student to an instructor, sends/reads InstructorMessage rows, confirms an unlinked instructor is rejected, and runs the reused Pre-flight Agent for the linked student.
+
 ### Pre-flight Agent test
 
 ```bash
