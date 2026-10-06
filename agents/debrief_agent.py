@@ -54,9 +54,12 @@ def save_debrief(flight_id: int, student_pk: int, student_reported_feedback: str
         session.close()
 
 
-def open_instructor_chat(student_pk: int) -> dict:
+def open_instructor_chat(student_pk: int | None = None) -> dict:
     # Wired (Phase 5) to real InstructorMessage storage via agents/instructor.py:
     # returns the linked instructor's conversation thread for this student.
+    # student_pk optional so legacy Phase-4 call sites omitting it keep working.
+    if student_pk is None:
+        return {"status": "wired", "message": "Instructor thread available via agents.instructor.get_conversation."}
     session = SessionLocal()
     try:
         student = session.query(Student).filter_by(id=student_pk).first()

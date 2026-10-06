@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from agents.instructor import get_conversation
 from backend.api.deps import get_current_student
-from backend.api.sessions import get_debrief_agent, get_preflight_agent, get_technical_agent
+from backend.api.sessions import get_debrief_agent, get_preflight_agent, get_router_agent, get_technical_agent
 from backend.database import SessionLocal
 from backend.models import Flight, Student
 
@@ -22,6 +22,12 @@ class ChatMessage(BaseModel):
 class DebriefMessage(BaseModel):
     message: str
     flight_id: int | None = None
+
+
+@router.post("/chat")
+def chat(body: ChatMessage, student: Student = Depends(get_current_student)):
+    agent = get_router_agent(student.student_id)
+    return agent.chat(body.message)
 
 
 @router.post("/preflight")

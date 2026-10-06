@@ -46,9 +46,12 @@ class GeminiChat:
                 msg = str(exc)
                 transient = ("503" in msg or "UNAVAILABLE" in msg)
                 rate_limited = "429" in msg or "RESOURCE_EXHAUSTED" in msg
-                if i == attempts - 1 or not (transient or rate_limited):
+                # 429: retry twice quickly (30s), then fall back to Ollama (quota wall).
+                # 503: persist longer (overloads clear in seconds-to-a-minute).
+                max_attempts = 2 if rate_limited else attempts
+                if i >= max_attempts - 1 or not (transient or rate_limited):
                     raise
-                time.sleep(30 if rate_limited else 5 * (i + 1))
+                time.sleep(15 if rate_limited else 5 * (i + 1))
 
     def chat(self, message: str) -> str:
         self._ollama_msgs.append({"role": "user", "content": message})
