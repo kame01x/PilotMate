@@ -38,7 +38,8 @@ All configuration is read from `.env` at the project root:
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./pilotmate.db` | SQLAlchemy database URL. Change to a Postgres connection string to switch databases. |
-| `GEMINI_API_KEY` | — | Gemini API key for the Pre-flight Agent chat. Without it, tools still run directly. |
+| `GEMINI_API_KEY` | — | Gemini API key for the agent chat. Without it, tools still run directly. |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model name. Switch freely (e.g. `gemini-3.5-flash`, `gemini-3.7-flash`) if a model's quota is exhausted. |
 | `TAVILY_API_KEY` | — | Enables NOTAM/active-area web search tool. Without it, the tool returns a notice. |
 | `AVIOWIKI_API_KEY` | — | Optional token for Aviowiki airport lookups (unauthenticated calls work, rate-limited). |
 

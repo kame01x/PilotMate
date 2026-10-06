@@ -8,9 +8,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from backend.config import GEMINI_API_KEY
+from backend.config import GEMINI_API_KEY, GEMINI_MODEL
 
-DEFAULT_MODEL = "gemini-3.8-flash"
+DEFAULT_MODEL = GEMINI_MODEL
 
 
 class GeminiChat:
