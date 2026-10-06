@@ -49,6 +49,19 @@ def _instructor_pk(instructor: Instructor) -> int:
         session.close()
 
 
+@router.get("/students")
+def linked_students(instructor: Instructor = Depends(get_current_instructor)):
+    session = SessionLocal()
+    try:
+        row = session.query(Instructor).filter_by(instructor_id=instructor.instructor_id).first()
+        return [
+            {"student_id": s.student_id, "name": s.name, "home_airport": s.home_airport}
+            for s in (row.linked_students if row else [])
+        ]
+    finally:
+        session.close()
+
+
 @router.post("/link-student")
 def link(body: LinkBody, instructor: Instructor = Depends(get_current_instructor)):
     student = _student_by_business_id(body.student_id)
@@ -80,6 +93,7 @@ def read_thread(student_id: str, instructor: Instructor = Depends(get_current_in
 def preflight(body: PreflightBody, instructor: Instructor = Depends(get_current_instructor)):
     student = _student_by_business_id(body.student_id)
     try:
-        return {"response": instructor_run_preflight(_instructor_pk(instructor), student.id, body.message)}
+        response_text = instructor_run_preflight(_instructor_pk(instructor), student.id, body.message)
+        return {"response": response_text, "notice": None}
     except PermissionError as exc:
         raise HTTPException(403, str(exc))

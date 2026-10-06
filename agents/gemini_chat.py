@@ -30,6 +30,7 @@ class GeminiChat:
         self.model = model
         self.history: list[dict] = []
         self._ollama_msgs: list[dict] = []
+        self.last_notice: str | None = None
         self._client = None
         if GEMINI_API_KEY:
             from google import genai
@@ -57,6 +58,7 @@ class GeminiChat:
         self._ollama_msgs.append({"role": "user", "content": message})
         if self._client is None:
             print(f"[fallback] GEMINI_API_KEY not configured — using local Ollama model {OLLAMA_MODEL}")
+            self.last_notice = f"GEMINI_API_KEY not configured — used local Ollama model {OLLAMA_MODEL}"
             return self._chat_ollama()
         types = self._types
         self.history.append({"role": "user", "parts": [{"text": message}]})
@@ -81,7 +83,9 @@ class GeminiChat:
             reason = self._fallback_reason(exc)
             if reason is None:
                 raise
-            print(f"[fallback] Gemini {reason} — using local Ollama model {OLLAMA_MODEL} for this response")
+            notice = f"Gemini {reason} — used local Ollama model {OLLAMA_MODEL} for this response"
+            print(f"[fallback] {notice}")
+            self.last_notice = notice
             return self._chat_ollama()
 
     def _fallback_reason(self, exc: Exception) -> str | None:
