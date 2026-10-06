@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from agents.gemini_chat import GeminiChat
 from backend.config import TAVILY_API_KEY
 from backend.database import SessionLocal
+from backend.documents import get_library_reference
 from backend.models import Flight, Student, TechnicalLog
 
 PREFERRED_VIDEO_SOURCES = ["boldmethod", "aopa", "pilotinstitute", "eaa", "flightout", "aerowebsite"]
@@ -93,6 +94,18 @@ def _build_tool_declarations():
             ),
         ),
         types.FunctionDeclaration(
+            name="get_library_reference",
+            description="Look up a real document in the PilotMate documentation library to cite",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "aircraft_type": types.Schema(type=types.Type.STRING),
+                    "document_type": types.Schema(type=types.Type.STRING),
+                    "category": types.Schema(type=types.Type.STRING),
+                },
+            ),
+        ),
+        types.FunctionDeclaration(
             name="log_technical_exchange",
             description="Log a technical-coaching exchange for later Debrief Agent use",
             parameters=types.Schema(
@@ -117,6 +130,7 @@ class TechnicalAgent:
 
         impls = {
             "find_reference_video": find_reference_video,
+            "get_library_reference": get_library_reference,
             "log_technical_exchange": lambda topic, exchange_type, key_points, authority_caveat=None: log_technical_exchange(
                 student_id=self._student_pk, flight_id=self._flight_id, topic=topic,
                 exchange_type=exchange_type, key_points=key_points, authority_caveat=authority_caveat,
@@ -130,13 +144,14 @@ class TechnicalAgent:
         return f"""You are PilotMate's Technical Agent. Student profile authority: {self.authority}.
 
 Modes:
-- Exercise mode (stall, slow flight, landing, ...): start with a short theory explanation, then common student errors for that exercise (framed as "things students commonly get wrong", never a diagnosis of this student), then one reference video suggestion (call find_reference_video), and a diagram described as structured steps/stages since you cannot show images in v1 — note that a visual aid is available in the documentation library (Part 3).
+- Exercise mode (stall, slow flight, landing, ...): start with a short theory explanation, then common student errors for that exercise (framed as "things students commonly get wrong", never a diagnosis of this student), then one reference video suggestion (call find_reference_video), and a diagram described as structured steps/stages since you cannot show images in v1 — and cite the matching library entry via get_library_reference.
 - Open-topic mode: answer directly and conversationally; ask a clarifying question only if genuinely ambiguous.
 
 Rules:
 - Regulation- or procedure-specific answers MUST state which authority they assume (use the student's profile, currently '{self.authority}') and note it may differ under other authorities, plus one line: confirm against the student's actual POH/AIP/syllabus.
 - Never present one authority's rule as universal. You teach and suggest; the student/instructor holds final responsibility.
-- Use tools: find_reference_video for videos, log_technical_exchange (with exchange_type 'exercise' or 'open_topic', topic, key_points list, authority_caveat when applicable) after each substantive exchange."""
+- MUST call get_library_reference(category='aircraft', aircraft_type=<student's aircraft>, document_type='POH') and cite the exact title + file_reference + source from the returned documents list in your response. Do not say "see Part 3" or "not found" without calling the tool.
+- Use tools: find_reference_video for videos, get_library_reference for document citations, and log_technical_exchange (exchange_type 'exercise' or 'open_topic', topic, key_points list, authority_caveat when applicable) after each substantive exchange."""
 
     def start_exercise(self, exercise_type: str) -> str:
         return self._chat.chat(

@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from agents.gemini_chat import GeminiChat
 from backend.config import AVIOWIKI_API_KEY, TAVILY_API_KEY
 from backend.database import SessionLocal
+from backend.documents import get_library_reference
 from backend.models import Flight, PreflightPackage, Student
 
 VERIFY_NOTICE = (
@@ -166,13 +167,14 @@ TOOL_IMPLEMENTATIONS = {
     "search_notams_active_areas": search_notams_active_areas,
     "get_mass_balance_reference": get_mass_balance_reference,
     "get_document_checklist": get_document_checklist,
+    "get_library_reference": get_library_reference,
 }
 
 SYSTEM_PROMPT = """You are PilotMate's Pre-flight Agent. You help a student pilot plan a flight.
 Flow:
 1. Collect flight details: departure airport, destination (if cross-country), route, aircraft type, exercise type, flight rules (VFR/IFR).
 2. For runway surface (grass/concrete) and controlled/uncontrolled, ALWAYS ask the student to confirm — never assume. You may call get_airport_info and flag conflicts, but never override the student's choice.
-3. Use the tools to gather: weather (get_metar_taf), airport info (get_airport_info), NOTAMs/active areas (search_notams_active_areas), mass & balance reference (get_mass_balance_reference), document checklist (get_document_checklist).
+3. Use the tools to gather: weather (get_metar_taf), airport info (get_airport_info), NOTAMs/active areas (search_notams_active_areas), mass & balance reference (get_mass_balance_reference), document checklist (get_document_checklist), and real library references where relevant (get_library_reference).
 4. Every safety-relevant output must visibly state it is reference data the student/instructor must verify, with the source link.
 5. Once the student confirms everything, summarize the pre-flight package.
 Never auto-override student input. Final confirmation is always manual."""
@@ -216,6 +218,18 @@ def _build_tool_declarations():
                     type=types.Type.OBJECT,
                     properties={"aircraft_type": types.Schema(type=types.Type.STRING)},
                     required=["aircraft_type"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="get_library_reference",
+                description="Look up a real reference document (POH, checklist, charts) from the library",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "aircraft_type": types.Schema(type=types.Type.STRING),
+                        "document_type": types.Schema(type=types.Type.STRING),
+                        "category": types.Schema(type=types.Type.STRING),
+                    },
                 ),
             ),
             types.FunctionDeclaration(
