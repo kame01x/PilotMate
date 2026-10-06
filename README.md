@@ -38,6 +38,17 @@ All configuration is read from `.env` at the project root:
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./pilotmate.db` | SQLAlchemy database URL. Change to a Postgres connection string to switch databases. |
+| `GEMINI_API_KEY` | — | Gemini API key for the Pre-flight Agent chat. Without it, tools still run directly. |
+| `TAVILY_API_KEY` | — | Enables NOTAM/active-area web search tool. Without it, the tool returns a notice. |
+| `AVIOWIKI_API_KEY` | — | Optional token for Aviowiki airport lookups (unauthenticated calls work, rate-limited). |
+
+### Pre-flight Agent test
+
+```bash
+uv run python scripts/test_preflight.py
+```
+
+Simulates a full pre-flight conversation (weather, airport info, NOTAMs, mass & balance, checklist) and saves a Flight + PreflightPackage.
 
 ### Switching to Postgres
 
