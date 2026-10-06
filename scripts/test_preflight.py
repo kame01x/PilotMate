@@ -44,7 +44,7 @@ def main() -> None:
     airport = get_airport_info(DETAILS["departure_airport"])
     show("Airport info", airport)
 
-    notams = search_notams_active_areas(f"{DETAILS['departure_airport']} California")
+    notams = search_notams_active_areas(DETAILS["departure_airport"])
     show("NOTAM / active areas", notams)
 
     mass_balance = get_mass_balance_reference(DETAILS["aircraft_type"])

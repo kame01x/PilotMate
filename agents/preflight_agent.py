@@ -70,27 +70,76 @@ def get_airport_info(airport_icao: str) -> dict:
     }
 
 
-def search_notams_active_areas(query: str) -> dict:
+ICAO_PREFIX_TO_AIS = {
+    "K": ("United States", ["notams.aim.faa.gov", "1800wxbrief.com"]),
+    "C": ("Canada", ["navcanada.ca"]),
+    "EG": ("United Kingdom", ["ais.nats.co.uk"]),
+    "EI": ("Ireland", ["iaa.ie"]),
+    "LF": ("France", ["notam.sia.aviation-civile.gouv.fr"]),
+    "ED": ("Germany", ["dfs.de"]),
+    "LE": ("Spain", ["enaire.es"]),
+    "LI": ("Italy", ["enac.gov.it"]),
+    "EH": ("Netherlands", ["lvdl.nl"]),
+    "Y": ("Australia", ["airservicesaustralia.com"]),
+    "NZ": ("New Zealand", ["airways.co.nz"]),
+}
+
+
+def resolve_country_and_ais(airport_icao: str) -> tuple[str, list[str]]:
+    prefix2 = airport_icao[:2].upper()
+    prefix1 = airport_icao[:1].upper()
+    if prefix2 in ICAO_PREFIX_TO_AIS:
+        return ICAO_PREFIX_TO_AIS[prefix2]
+    if prefix1 in ICAO_PREFIX_TO_AIS:
+        return ICAO_PREFIX_TO_AIS[prefix1]
+    return ("Unknown", [])
+
+
+def search_notams_active_areas(airport_icao: str, query: str | None = None) -> dict:
     # NOTE: requires TAVILY_API_KEY in .env (get a free key at https://tavily.com).
     # Until a key is set, this returns a notice instead of results.
+    country, official_sites = resolve_country_and_ais(airport_icao)
+    if query is None:
+        query = airport_icao
     if not TAVILY_API_KEY:
         return {
             "error": "TAVILY_API_KEY not configured. Add it to .env to enable NOTAM search.",
-            "source": "https://tavily.com",
+            "detected_country": country,
+            "official_sources": official_sites,
             "notice": VERIFY_NOTICE,
         }
+    site_clause = " OR ".join(f"site:{site}" for site in official_sites) or ""
+    search_query = f'{query} NOTAM active areas {site_clause}'.strip()
     try:
         from tavily import TavilyClient
 
         client = TavilyClient(api_key=TAVILY_API_KEY)
-        results = client.search(query=f"{query} NOTAM active areas self-briefing AIS", max_results=5)
-        return {
-            "results": results,
-            "source": "web search via Tavily — use the official AIS source link in the results",
-            "notice": VERIFY_NOTICE,
-        }
+        results = client.search(query=search_query, max_results=5)
     except Exception as exc:
         return {"error": str(exc), "source": "https://tavily.com"}
+
+    relevant = []
+    for r in results.get("results", []):
+        url = r.get("url", "")
+        title = (r.get("title") or "").lower()
+        content = (r.get("content") or "").lower()
+        if airport_icao.lower() in title or airport_icao.lower() in content:
+            relevant.append(r)
+        elif any(site in url for site in official_sites):
+            relevant.append(r)
+
+    return {
+        "query": search_query,
+        "detected_country": country,
+        "official_sources": official_sites,
+        "clearly_relevant": len(relevant) > 0,
+        "results": relevant if relevant else results.get("results", []),
+        "notice": (
+            VERIFY_NOTICE
+            if relevant
+            else f"No clearly relevant results found for {airport_icao} ({country}). Check the official AIS site manually: {', '.join(official_sites) or 'official national AIS'}."
+        ),
+    }
 
 
 def get_mass_balance_reference(aircraft_type: str) -> dict:
@@ -165,11 +214,11 @@ class PreflightAgent:
             ),
             types.FunctionDeclaration(
                 name="search_notams_active_areas",
-                description="Search web for NOTAM and active area info for a country/airport",
+                description="Search the correct country's official AIS sources for NOTAM and active area info for an airport",
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
-                    properties={"query": types.Schema(type=types.Type.STRING)},
-                    required=["query"],
+                    properties={"airport_icao": types.Schema(type=types.Type.STRING)},
+                    required=["airport_icao"],
                 ),
             ),
             types.FunctionDeclaration(
