@@ -2,8 +2,6 @@
 and produces a PreflightPackage for a Flight. Uses Gemini (google-genai) with
 function calling. All safety-relevant output is reference data the student must verify."""
 
-import json
-import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,7 +10,8 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from backend.config import AVIOWIKI_API_KEY, GEMINI_API_KEY, TAVILY_API_KEY
+from agents.gemini_chat import GeminiChat
+from backend.config import AVIOWIKI_API_KEY, TAVILY_API_KEY
 from backend.database import SessionLocal
 from backend.models import Flight, PreflightPackage, Student
 
@@ -179,21 +178,10 @@ Flow:
 Never auto-override student input. Final confirmation is always manual."""
 
 
-class PreflightAgent:
-    def __init__(self, student_id: str):
-        self.student_id = student_id
-        self.history: list[dict] = []
-        self._client = None
-        if GEMINI_API_KEY:
-            from google import genai
-            from google.genai import types
+def _build_tool_declarations():
+    from google.genai import types
 
-            self._client = genai.Client(api_key=GEMINI_API_KEY)
-            self._types = types
-
-    def _tool_declarations(self):
-        types = self._types
-        return [
+    return [
             types.FunctionDeclaration(
                 name="get_metar_taf",
                 description="Get METAR and TAF weather for an airport",
@@ -237,37 +225,15 @@ class PreflightAgent:
             ),
         ]
 
-    def chat(self, message: str) -> str:
-        if self._client is None:
-            return "GEMINI_API_KEY not configured in .env — agent chat unavailable. Tools still work directly."
-        from google.genai import types
+class PreflightAgent:
+    def __init__(self, student_id: str):
+        self.student_id = student_id
+        self._chat = GeminiChat(
+            SYSTEM_PROMPT, _build_tool_declarations(), TOOL_IMPLEMENTATIONS
+        )
 
-        self.history.append({"role": "user", "parts": [{"text": message}]})
-        config = types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            tools=[types.Tool(function_declarations=self._tool_declarations())],
-        )
-        response = self._client.models.generate_content(
-            model="gemini-3.8-flash", contents=self.history, config=config
-        )
-        while response.function_calls:
-            parts = []
-            for call in response.function_calls:
-                fn = TOOL_IMPLEMENTATIONS[call.name]
-                result = fn(**(call.args or {}))
-                parts.append(
-                    types.Part.from_function_response(
-                        name=call.name, response={"result": json.dumps(result, default=str)}
-                    )
-                )
-            self.history.append(response.candidates[0].content)
-            self.history.append({"role": "user", "parts": parts})
-            response = self._client.models.generate_content(
-                model="gemini-3.8-flash", contents=self.history, config=config
-            )
-        text = response.text or ""
-        self.history.append({"role": "model", "parts": [{"text": text}]})
-        return text
+    def chat(self, message: str) -> str:
+        return self._chat.chat(message)
 
 
 def create_flight(student_id: str, details: dict) -> Flight:

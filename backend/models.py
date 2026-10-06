@@ -142,3 +142,22 @@ class InstructorMessage(Base):
     message_text: Mapped[str] = mapped_column(Text, nullable=False)
     read_status: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TechnicalLog(Base):
+    __tablename__ = "technical_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False)
+    flight_id: Mapped[int | None] = mapped_column(ForeignKey("flights.id"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(200), nullable=False)
+    exchange_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    key_points: Mapped[dict | list | None] = mapped_column(JSON)
+    authority_caveat: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    student: Mapped["Student"] = relationship("Student")
+    flight: Mapped["Flight | None"] = relationship("Flight")
