@@ -23,6 +23,8 @@ class Student(Base):
     linked_instructor_id: Mapped[int | None] = mapped_column(
         ForeignKey("instructors.id"), nullable=True
     )
+    email: Mapped[str | None] = mapped_column(String(200), unique=True, nullable=True)
+    hashed_password: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -42,6 +44,8 @@ class Instructor(Base):
     instructor_id: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     school: Mapped[str | None] = mapped_column(String(200))
+    email: Mapped[str | None] = mapped_column(String(200), unique=True, nullable=True)
+    hashed_password: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

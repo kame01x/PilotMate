@@ -43,6 +43,14 @@ All configuration is read from `.env` at the project root:
 | `TAVILY_API_KEY` | — | Enables NOTAM/active-area web search tool. Without it, the tool returns a notice. |
 | `AVIOWIKI_API_KEY` | — | Optional token for Aviowiki airport lookups (unauthenticated calls work, rate-limited). |
 
+### HTTP API (Phase 8)
+
+```bash
+uv run uvicorn backend.api.main:app --reload   # http://127.0.0.1:8000/docs
+```
+
+All agent routes require a JWT from `/auth/student/login` or `/auth/instructor/login` (signup first). Test without a server: `uv run python scripts/test_api.py`.
+
 ### Phase 5 test — Instructor (Part 2 v1)
 
 ```bash
