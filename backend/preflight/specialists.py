@@ -23,8 +23,29 @@ def _src(name: str, url: str | None = None) -> Source:
     return Source(name=name, url=url, fetched_at=datetime.now(timezone.utc))
 
 
+def _as_text(value) -> str | None:
+    """Render a value as display text. External APIs sometimes return objects
+    (e.g. AvioWiki's country {iso2, iso3, name, ...}) — never leak raw objects
+    into blocks: React cannot render them."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("name", "title", "label", "value"):
+            if isinstance(value.get(key), str):
+                return value[key]
+        return None
+    return str(value)
+
+
 def kv(pairs: list[tuple[str, str]]) -> dict:
-    return {"type": "kv", "rows": [{"label": k, "value": v} for k, v in pairs if v not in (None, "")]}
+    rows = []
+    for k, v in pairs:
+        text = _as_text(v)
+        if text not in (None, ""):
+            rows.append({"label": str(k), "value": text})
+    return {"type": "kv", "rows": rows}
 
 
 def paragraph(text: str) -> dict:
@@ -238,10 +259,14 @@ def _airport_blocks(airport_data: dict, role: str) -> tuple[list[dict], list[Sou
                               "Verify the field in the official AIP/AD 2 chart."))
         return blocks, sources
     coords = a.get("coordinates") or {}
+    country = a.get("country")
+    if isinstance(country, dict):
+        # AvioWiki returns {iso2, iso3, isoNumeric, name, officialName, ...}
+        country = country.get("name") or country.get("iso2")
     kv_rows = [
         ("ICAO", a.get("icao")),
         ("Name", a.get("name")),
-        ("Country", a.get("country")),
+        ("Country", country),
         ("Elevation", f"{a.get('elevation_m')} m" if a.get("elevation_m") is not None else "—"),
         ("Lat/Lon", f"{coords.get('latitude')}, {coords.get('longitude')}")
         if coords.get("latitude") is not None else "—",

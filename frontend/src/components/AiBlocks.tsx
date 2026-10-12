@@ -10,6 +10,28 @@ export function extractYouTubeId(url: string): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * Coerce a block field to renderable text. Backend specialists stringify at
+ * the source, but a stray object (e.g. an API payload that leaked into a kv
+ * row) must never white-screen the briefing — degrade to readable text.
+ */
+export function asText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    for (const key of ["name", "title", "label", "value"]) {
+      if (typeof obj[key] === "string") return obj[key];
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
 /** Verified video card: thumbnail-first, embeds only oEmbed-confirmed videos. */
 export function VideoCard({ block }: { block: Extract<ContentBlock, { type: "video" }> }) {
   return (
@@ -56,15 +78,15 @@ export function AiBlocks({ blocks }: { blocks: ContentBlock[] }) {
 function AiBlock({ block }: { block: ContentBlock }) {
   switch (block.type) {
     case "heading":
-      return <h4 className="text-sm font-semibold text-foreground">{block.text}</h4>;
+      return <h4 className="text-sm font-semibold text-foreground">{asText(block.text)}</h4>;
     case "paragraph":
-      return <LinkifiedText text={block.text} className="text-sm leading-relaxed" />;
+      return <LinkifiedText text={asText(block.text)} className="text-sm leading-relaxed" />;
     case "bullets":
       return (
         <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
           {block.items.map((item, i) => (
             <li key={i}>
-              <LinkifiedText text={item} className="inline" />
+              <LinkifiedText text={asText(item)} className="inline" />
             </li>
           ))}
         </ul>
@@ -74,7 +96,7 @@ function AiBlock({ block }: { block: ContentBlock }) {
         <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm">
           {block.items.map((item, i) => (
             <li key={i}>
-              <LinkifiedText text={item} className="inline" />
+              <LinkifiedText text={asText(item)} className="inline" />
             </li>
           ))}
         </ol>
@@ -84,8 +106,8 @@ function AiBlock({ block }: { block: ContentBlock }) {
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
           {block.rows.map((row, i) => (
             <div key={i} className="contents">
-              <dt className="text-muted-foreground">{row.label}</dt>
-              <dd className="text-foreground">{row.value}</dd>
+              <dt className="text-muted-foreground">{asText(row.label)}</dt>
+              <dd className="text-foreground">{asText(row.value)}</dd>
             </div>
           ))}
         </dl>
@@ -93,13 +115,13 @@ function AiBlock({ block }: { block: ContentBlock }) {
     case "code":
       return (
         <pre className="overflow-x-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-          {block.text}
+          {asText(block.text)}
         </pre>
       );
     case "warning":
       return (
         <div className="rounded-sm border border-caution/40 bg-caution/10 px-3 py-2 text-xs text-caution">
-          {block.text}
+          {asText(block.text)}
         </div>
       );
     case "video":
