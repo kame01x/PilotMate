@@ -36,20 +36,89 @@ DOCUMENT_CHECKLIST = [
 ]
 
 
-def get_metar_taf(airport_icao: str) -> dict:
-    url = "https://aviationweather.gov/api/data/metar"
-    taf_url = "https://aviationweather.gov/api/data/taf"
+AWC_METAR_URL = "https://aviationweather.gov/api/data/metar"
+AWC_TAF_URL = "https://aviationweather.gov/api/data/taf"
+
+
+def _awc_fetch(url: str, params: dict) -> tuple[list | None, str | None]:
+    """Fetch from aviationweather.gov.
+
+    Returns (data, error). Empty results (HTTP 204 or []) come back as [] with
+    no error — meaning the station simply doesn't publish that product.
+    """
     try:
-        metar = httpx.get(url, params={"ids": airport_icao, "format": "json"}, timeout=15).json()
-        taf = httpx.get(taf_url, params={"ids": airport_icao, "format": "json"}, timeout=15).json()
+        resp = httpx.get(url, params=params, timeout=15, follow_redirects=True)
     except Exception as exc:
-        return {"error": str(exc), "source": "https://aviationweather.gov"}
+        return None, str(exc)
+    if resp.status_code == 204 or not resp.text.strip():
+        return [], None
+    if resp.status_code != 200:
+        return None, f"HTTP {resp.status_code}"
+    try:
+        data = resp.json()
+    except ValueError:
+        return None, "non-JSON response"
+    if isinstance(data, dict):  # AWC error payload: {"status": "error", ...}
+        return None, str(data.get("error") or data.get("message") or data)[:200]
+    return data, None
+
+
+def _nearest_reporting_station(lat: float, lon: float, radius: float = 0.6) -> dict | None:
+    """Find the nearest station publishing a METAR within ~radius degrees."""
+    bbox = f"{lat - radius},{lon - radius},{lat + radius},{lon + radius}"
+    stations, _ = _awc_fetch(AWC_METAR_URL, {"bbox": bbox, "format": "json"})
+    if not stations:
+        return None
+
+    def squared_distance(s: dict) -> float:
+        dlat = (s.get("lat") or lat) - lat
+        dlon = (s.get("lon") or lon) - lon
+        return dlat * dlat + dlon * dlon
+
+    best = min(stations, key=squared_distance)
+    dlat = (best.get("lat") or lat) - lat
+    dlon = (best.get("lon") or lon) - lon
+    km = ((dlat * 111.0) ** 2 + (dlon * 111.0 * 0.64) ** 2) ** 0.5
     return {
-        "metar": metar,
-        "taf": taf,
-        "source": "https://aviationweather.gov",
-        "notice": VERIFY_NOTICE,
+        "icao": best.get("icaoId"),
+        "distance_km": round(km, 1),
+        "raw_metar": best.get("rawOb"),
+        "obs_time": best.get("reportTime"),
     }
+
+
+def get_metar_taf(airport_icao: str) -> dict:
+    metar, metar_err = _awc_fetch(AWC_METAR_URL, {"ids": airport_icao, "format": "json"})
+    taf, taf_err = _awc_fetch(AWC_TAF_URL, {"ids": airport_icao, "format": "json"})
+    result: dict = {"source": "https://aviationweather.gov", "notice": VERIFY_NOTICE}
+    if metar_err or taf_err:
+        result["error"] = "; ".join(
+            f"{name}: {err}" for name, err in (("METAR", metar_err), ("TAF", taf_err)) if err
+        )
+    result["metar"] = metar or None
+    result["taf"] = taf or None
+
+    if not metar:
+        result["metar_unavailable"] = (
+            f"No METAR is published for {airport_icao} (no routine observations from this station)."
+        )
+        try:
+            airport = (get_airport_info(airport_icao).get("airport") or {})
+            coords = airport.get("coordinates") or {}
+            lat, lon = coords.get("latitude"), coords.get("longitude")
+            if lat is not None and lon is not None:
+                nearest = _nearest_reporting_station(lat, lon)
+                if nearest:
+                    result["nearest_reporting_station"] = nearest
+                    result["metar_unavailable"] += (
+                        f" Nearest reporting station: {nearest['icao']} "
+                        f"({nearest['distance_km']} km away) — conditions there may differ; verify locally."
+                    )
+        except Exception:
+            pass
+    if not taf:
+        result["taf_unavailable"] = f"No TAF is published for {airport_icao}."
+    return result
 
 
 def get_airport_info(airport_icao: str) -> dict:
@@ -177,7 +246,26 @@ Flow:
 3. Use the tools to gather: weather (get_metar_taf), airport info (get_airport_info), NOTAMs/active areas (search_notams_active_areas), mass & balance reference (get_mass_balance_reference), document checklist (get_document_checklist), and real library references where relevant (get_library_reference).
 4. Every safety-relevant output must visibly state it is reference data the student/instructor must verify, with the source link.
 5. Once the student confirms everything, summarize the pre-flight package.
-Never auto-override student input. Final confirmation is always manual."""
+Never auto-override student input. Final confirmation is always manual.
+
+OUTPUT FORMAT — you MUST structure the briefing with these exact section headings:
+## Flight Overview
+## Weather Briefing
+## Departure Airport
+## Destination Airport
+## NOTAMs and Airspace
+## Route and Navigation
+## Aircraft and Planned Exercises
+## Day/Night Considerations
+## Hazards and Risk Assessment
+## Pre-flight Review Checklist
+## Data Sources and Limitations
+
+Rules for each section:
+- If data is unavailable, write "Data unavailable — [reason]" rather than omitting the section.
+- Distinguish observations from forecasts. Include timestamps where available.
+- Never invent runway headings, performance figures, or procedures.
+- End every section with a source reference when data was retrieved."""
 
 
 def _build_tool_declarations():
@@ -248,6 +336,27 @@ class PreflightAgent:
 
     def chat(self, message: str) -> str:
         return self._chat.chat(message)
+
+    def suggest_routes(self, departure: str, destination: str | None, aircraft_type: str, exercise: str) -> dict:
+        from google.genai import types
+
+        prompt = (
+            f"Suggest 1-3 candidate flight routes from {departure}"
+            + (f" to {destination}" if destination else " (local flight)")
+            + f" in a {aircraft_type} for exercise: {exercise}. "
+            "Use get_airport_info for both airports if needed. "
+            "Return a JSON object with a 'routes' array, each with 'name', 'description', 'waypoints'. "
+            "Label these as AI-generated suggestions requiring pilot verification."
+        )
+        response = self._chat.chat(prompt)
+        try:
+            import json
+            parsed = json.loads(response)
+            if isinstance(parsed, dict) and "routes" in parsed:
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return {"routes": [{"name": "Suggested route", "description": response, "waypoints": []}]}
 
 
 def create_flight(student_id: str, details: dict) -> Flight:

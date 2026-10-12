@@ -24,6 +24,9 @@ class DebriefMessage(BaseModel):
     flight_id: int | None = None
 
 
+# Pre-flight request/endpoints moved to backend/api/preflight_api.py (v2 engine).
+
+
 @router.post("/chat")
 def chat(body: ChatMessage, student: Student = Depends(get_current_student)):
     agent = get_router_agent(student.student_id)
@@ -42,12 +45,6 @@ def chat(body: ChatMessage, student: Student = Depends(get_current_student)):
             pass
     result["notice"] = notice
     return result
-
-
-@router.post("/preflight")
-def preflight(body: ChatMessage, student: Student = Depends(get_current_student)):
-    agent = get_preflight_agent(student.student_id)
-    return {"response": agent.chat(body.message), "notice": getattr(agent._chat, "last_notice", None)}
 
 
 @router.post("/technical")

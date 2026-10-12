@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.auth import router as auth_router
 from backend.api.instructor import router as instructor_router
+from backend.api.preflight_api import router as preflight_router
 from backend.api.reference import router as reference_router
 from backend.api.student import router as student_router
 
@@ -24,6 +25,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(preflight_router)
 app.include_router(student_router)
 app.include_router(instructor_router)
 app.include_router(reference_router)
