@@ -34,7 +34,7 @@ function SignupForm() {
       });
       setToken(login.access_token);
       setRole(role);
-      router.push(role === "student" ? "/student" : "/instructor");
+      router.push("/dashboard");
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -54,7 +54,7 @@ function SignupForm() {
         <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
         <div><Label>Password (min 8 chars)</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
         <div><Label>School (optional)</Label><Input value={school} onChange={(e) => setSchool(e.target.value)} /></div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <Button onClick={submit} disabled={loading}>{loading ? "Creating account…" : "Sign up"}</Button>
       </CardContent>
     </Card>
@@ -63,7 +63,7 @@ function SignupForm() {
 
 export default function SignupPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <main className="auth-backdrop flex min-h-screen items-center justify-center p-8">
       <Suspense><SignupForm /></Suspense>
     </main>
   );

@@ -1,0 +1,74 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/ThemeToggle";
+
+export type SidebarItem = { id: string; label: string; iconPath: string };
+
+export const STUDENT_ITEMS: SidebarItem[] = [
+  { id: "dashboard", label: "Dashboard", iconPath: "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10" },
+  { id: "preflight", label: "Pre-flight", iconPath: "M22 2 11 13 M22 2l-7 20-4-9-9-4 20-7z" },
+  { id: "technical", label: "Technical", iconPath: "M22 12h-4l-3 9L9 3l-3 9H2z" },
+  { id: "debrief", label: "Debriefing", iconPath: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" },
+];
+
+export default function Shell({
+  title,
+  items,
+  active,
+  onSelect,
+  children,
+  onLogout,
+}: {
+  title: string;
+  items: SidebarItem[];
+  active: string;
+  onSelect: (id: string) => void;
+  children: React.ReactNode;
+  onLogout: () => void;
+}) {
+  const router = useRouter();
+  return (
+    <div className="flex h-screen">
+      <aside className="flex w-64 flex-col gap-2 border-r border-sidebar-border bg-sidebar p-4">
+        <div className="mb-2 flex items-center justify-between px-2">
+          <h2 className="text-lg font-bold text-sidebar-foreground">PilotMate</h2>
+          <ThemeToggle />
+        </div>
+        <nav className="flex flex-col gap-4">
+          {items.map((item) => {
+            const isActive = active === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onSelect(item.id)}
+                className={`flex items-center gap-3 rounded-md px-4 py-3 text-left text-base transition-colors ${
+                  isActive
+                    ? "border-l-4 border-secondary bg-secondary/10 text-secondary"
+                    : "text-sidebar-foreground/80 hover:bg-accent hover:text-sidebar-foreground"
+                }`}
+              >
+                <svg viewBox="0 0 24 24" className={`h-5 w-5 fill-none ${isActive ? "stroke-current" : "stroke-sidebar-icon"}`} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d={item.iconPath} />
+                </svg>
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="mt-auto flex flex-col gap-2">
+          <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
+            <svg viewBox="0 0 24 24" className="mr-1 inline h-4 w-4 fill-none stroke-current" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            Main Dashboard
+          </Button>
+          <Button variant="outline" size="sm" onClick={onLogout}>Log out</Button>
+        </div>
+      </aside>
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-8 pl-8 pr-4">
+        {children}
+      </main>
+    </div>
+  );
+}

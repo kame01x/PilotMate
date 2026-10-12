@@ -1,5 +1,5 @@
 """Part 4 — Exam prep (v1): honest placeholder structure only.
-Three sections reserved. No content, no model calls, no external APIs."""
+Placeholder sections reserved. No content, no model calls, no external APIs."""
 
 import sys
 from pathlib import Path
@@ -9,6 +9,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 SECTIONS = {
     "PPL": "Under construction — Private Pilot exam prep is planned for a later phase.",
     "ATPL": "Under construction — ATPL exam prep is planned for a later phase.",
+    "CPL": "Under construction — CPL exam prep is planned for a later phase.",
+    "Boeing Exam": "Under construction — Boeing Exam prep is planned for a later phase.",
+    "Airbus Exam": "Under construction — Airbus Exam prep is planned for a later phase.",
+    "Private Jet": "Under construction — Private Jet exam prep is planned for a later phase.",
     "Know Your Aircraft": "Under construction — Know Your Aircraft section is planned for a later phase.",
 }
 

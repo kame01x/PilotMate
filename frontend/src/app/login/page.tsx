@@ -28,7 +28,7 @@ function LoginForm() {
       });
       setToken(data.access_token);
       setRole(role);
-      router.push(role === "student" ? "/student" : "/instructor");
+      router.push("/dashboard");
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -46,7 +46,7 @@ function LoginForm() {
         </div>
         <div><Label>Email</Label><Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" /></div>
         <div><Label>Password</Label><Input value={password} onChange={(e) => setPassword(e.target.value)} type="password" /></div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <Button onClick={submit} disabled={loading}>{loading ? "Logging in…" : "Log in"}</Button>
       </CardContent>
     </Card>
@@ -55,7 +55,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <main className="auth-backdrop flex min-h-screen items-center justify-center p-8">
       <Suspense><LoginForm /></Suspense>
     </main>
   );

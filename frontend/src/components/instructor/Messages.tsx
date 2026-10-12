@@ -48,7 +48,7 @@ export default function Messages() {
         ))}
         {students.length === 0 && <p className="text-sm text-muted-foreground">No linked students yet.</p>}
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       {selected && (
         <div className="flex flex-col gap-2 rounded-md border p-3">
           <div className="max-h-64 overflow-y-auto flex flex-col gap-1">

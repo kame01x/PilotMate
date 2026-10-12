@@ -31,7 +31,7 @@ export default function LinkStudent({ onLinked }: { onLinked: () => void }) {
         <Input value={studentId} onChange={(e) => setStudentId(e.target.value)} />
         <Button onClick={link}>Link</Button>
       </div>
-      {message && <p className={`text-sm ${isError ? "text-red-600" : "text-green-700"}`}>{message}</p>}
+      {message && <p className={`text-sm ${isError ? "text-destructive" : "text-success"}`}>{message}</p>}
     </div>
   );
 }

@@ -37,8 +37,8 @@ export default function Debrief() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="max-w-sm">
+    <div className="flex min-h-0 flex-1 flex-col items-center gap-4 pt-8 pb-8">
+      <div className="w-full max-w-2xl">
         <Label>Flight to debrief</Label>
         <Select value={flightId} onValueChange={(v) => setFlightId(v ?? "")}>
           <SelectTrigger><SelectValue placeholder="Select a past flight" /></SelectTrigger>
@@ -51,24 +51,30 @@ export default function Debrief() {
           </SelectContent>
         </Select>
       </div>
+
       {saved && (
-        <Card className="border-amber-300">
-          <CardHeader><CardTitle className="text-base">Identified weak points — DRAFT (pending instructor review, not a final verdict)</CardTitle></CardHeader>
-          <CardContent>
-            <p className="mb-2 text-xs text-amber-800">{saved.identified_weak_points?.status}</p>
-            <ul className="list-disc pl-5 text-sm">
-              {(saved.identified_weak_points?.items ?? []).map((it: string, i: number) => (<li key={i}>{it}</li>))}
-            </ul>
-            {saved.coaching_notes && (
-              <>
-                <h4 className="mt-3 font-medium">Coaching notes</h4>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{saved.coaching_notes}</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <div className="w-full max-w-2xl">
+          <Card className="border-caution/40">
+            <CardHeader><CardTitle className="text-base text-caution">Identified weak points — DRAFT (pending instructor review, not a final verdict)</CardTitle></CardHeader>
+            <CardContent>
+              <p className="mb-2 text-xs text-caution">{saved.identified_weak_points?.status}</p>
+              <ul className="list-disc pl-5 text-sm">
+                {(saved.identified_weak_points?.items ?? []).map((it: string, i: number) => (<li key={i}>{it}</li>))}
+              </ul>
+              {saved.coaching_notes && (
+                <>
+                  <h4 className="mt-3 font-medium">Coaching notes</h4>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{saved.coaching_notes}</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
-      <ChatPanel placeholder="Tell me how the flight went…" onSend={send} />
+
+      <div className="flex min-h-0 w-full max-w-2xl flex-1 flex-col pt-99">
+        <ChatPanel placeholder="Tell me how the flight went…" onSend={send} />
+      </div>
     </div>
   );
 }

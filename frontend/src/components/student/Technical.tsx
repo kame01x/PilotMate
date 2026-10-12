@@ -1,37 +1,44 @@
 "use client";
 
-import ChatPanel, { ChatTurn } from "@/components/ChatPanel";
-import { apiFetch } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { useState } from "react";
-
-const EXERCISES = ["stall", "slow flight", "landing", "takeoff", "pattern work", "emergency procedures"];
+import { useEffect, useRef, useState } from "react";
+import TechnicalSidebar from "./TechnicalSidebar";
+import TechnicalChat from "./TechnicalChat";
+import type { Exercise } from "./technicalData";
 
 export default function Technical() {
-  const [active, setActive] = useState<string | null>(null);
-  const [openTopic, setOpenTopic] = useState(false);
+  const [selected, setSelected] = useState<Exercise | null>(null);
+  const [customExercises, setCustomExercises] = useState<Exercise[]>([]);
+  const chatKey = useRef(0);
 
-  async function send(message: string): Promise<ChatTurn> {
-    const data = await apiFetch("/student/technical", { method: "POST", body: JSON.stringify({ message }) });
-    return {
-      role: "assistant",
-      text: typeof data.response === "string" ? data.response : JSON.stringify(data.response, null, 2),
-      notice: data.notice ?? null,
-    };
+  function selectExercise(exercise: Exercise) {
+    setSelected((prev) => {
+      if (prev?.id === exercise.id) return prev;
+      chatKey.current++;
+      return exercise;
+    });
+  }
+
+  function addCustomExercise(name: string) {
+    const ex: Exercise = { id: `custom-${Date.now()}`, name, category: "Custom" };
+    setCustomExercises((prev) => {
+      if (prev.some((e) => e.name.toLowerCase() === name.toLowerCase())) return prev;
+      return [...prev, ex];
+    });
+    selectExercise(ex);
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">Buttons give the Technical Agent a specific exercise context; the open-topic box is for free-form theory questions scoped to technical topics.</p>
-      <div className="flex flex-wrap gap-2">
-        {EXERCISES.map((e) => (
-          <Button key={e} variant={active === e ? "default" : "outline"} size="sm" onClick={() => { setActive(e); setOpenTopic(false); }}>{e}</Button>
-        ))}
-        <Button variant={openTopic ? "default" : "outline"} size="sm" onClick={() => { setOpenTopic(true); setActive(null); }}>Open topic</Button>
+    <div className="flex h-full min-h-0 w-full overflow-hidden gap-3">
+      <TechnicalSidebar
+        selected={selected}
+        onSelect={selectExercise}
+        customExercises={customExercises}
+        onAddCustom={addCustomExercise}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <TechnicalChat key={chatKey.current} exercise={selected} onCustomTopic={() => {}} />
       </div>
-      {active && <ChatPanel placeholder={`Ask about ${active}…`} onSend={send} initialMessage={`I want coaching on ${active}. Please give the theory, common student errors, a reference video, and a diagram description.`} />}
-      {openTopic && <ChatPanel placeholder="Ask a theory question…" onSend={send} />}
-      {!active && !openTopic && <p className="text-sm text-muted-foreground">Pick an exercise or Open topic to start.</p>}
     </div>
   );
 }

@@ -13,7 +13,7 @@ export default function History() {
       .catch((e) => setError(e.message));
   }, []);
 
-  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (flights.length === 0) return <p className="text-sm text-muted-foreground">No flights recorded yet.</p>;
   const sorted = [...flights].sort((a, b) => (a.date < b.date ? 1 : -1));
   return (

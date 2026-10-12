@@ -3,14 +3,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from agents.instructor import get_conversation
-from backend.api.deps import get_current_student
+from backend.api.deps import get_current_student, get_current_user
 from backend.api.sessions import get_debrief_agent, get_preflight_agent, get_router_agent, get_technical_agent
 from backend.database import SessionLocal
 from backend.models import Debrief, Flight, Student
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/student", tags=["student"])
 
@@ -119,3 +122,14 @@ def instructor_thread(student: Student = Depends(get_current_student)):
         return {"conversation": get_conversation(student.id, student.linked_instructor_id)}
     except PermissionError as exc:
         raise HTTPException(403, str(exc))
+
+
+@router.get("/aviation-data")
+def aviation_data(user=Depends(get_current_user)):
+    from backend.aviation_data import AVIATION_AUTHORITIES, AIRCRAFT_TYPES, DOCUMENTATION_CATEGORIES, DOCUMENTATION_APPLICABILITY
+    return {
+        "authorities": AVIATION_AUTHORITIES,
+        "aircraft": AIRCRAFT_TYPES,
+        "documentation_categories": DOCUMENTATION_CATEGORIES,
+        "documentation_applicability": DOCUMENTATION_APPLICABILITY,
+    }
