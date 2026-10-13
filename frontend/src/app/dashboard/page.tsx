@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { getRole, getToken, setToken, setRole, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ThemeToggle from "@/components/ThemeToggle";
+import MusicPlayer from "@/components/music/MusicPlayer";
+import AnswerView from "@/components/answer/AnswerView";
 
 interface ModuleCardProps {
   title: string;
@@ -95,11 +97,12 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-8 p-8">
-      <div className="flex w-full max-w-4xl items-center justify-between">
+      <div className="flex w-full items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">PilotMate</h1>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
+        <div className="flex items-center gap-3">
           <button onClick={logout} className="text-sm text-muted-foreground hover:text-foreground">Log out</button>
+          <ThemeToggle />
+          <MusicPlayer />
         </div>
       </div>
 
@@ -123,8 +126,12 @@ export default function Dashboard() {
               {turns.length === 0 && <p className="text-sm text-muted-foreground">Type your aviation question here...</p>}
               {turns.map((turn, i) => (
                 <div key={i} className={turn.role === "user" ? "self-end max-w-[85%]" : "self-start max-w-[85%]"}>
-                  <div className={turn.role === "user" ? "rounded-md bg-primary px-3 py-2 text-primary-foreground" : "rounded-md border border-border bg-card px-3 py-2"}>
-                    <p className="text-sm whitespace-pre-wrap">{turn.text}</p>
+                  <div className={turn.role === "user" ? "rounded-md bg-primary px-3 py-2 text-primary-foreground" : "rounded-lg border border-border bg-card px-3 py-2.5"}>
+                    {turn.role === "user" ? (
+                      <p className="text-sm whitespace-pre-wrap">{turn.text}</p>
+                    ) : (
+                      <AnswerView text={turn.text} />
+                    )}
                   </div>
                 </div>
               ))}

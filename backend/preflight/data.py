@@ -237,7 +237,7 @@ def _oembed_sync(video_id: str) -> dict | None:
 async def find_verified_video(topic: str, preferred_sources: list[str] | None = None) -> ToolResult:
     """Search via Tavily, then verify each candidate through YouTube oEmbed.
 
-    Only videos that oEmbed confirms (type VideoObject) are returned. No key
+    Only videos that oEmbed confirms (type "video") are returned. No key
     required for oEmbed; Tavily key required for discovery.
     """
     if not TAVILY_API_KEY:
@@ -257,7 +257,8 @@ async def find_verified_video(topic: str, preferred_sources: list[str] | None = 
     verified = []
     for vid, r in candidates:
         meta = await asyncio.to_thread(_oembed_sync, vid)
-        if not meta or meta.get("type") != "VideoObject":
+        # YouTube oEmbed reports type "video" for real, embeddable videos.
+        if not meta or meta.get("type") != "video":
             continue  # not verified / not a video / embedding metadata unavailable
         verified.append({
             "video_id": vid,

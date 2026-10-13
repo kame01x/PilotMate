@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
+import MusicPlayer from "@/components/music/MusicPlayer";
 
 export interface SidebarListItem {
   id: string;
@@ -29,10 +30,11 @@ export default function SidebarList({
     <aside className="flex h-full w-64 flex-shrink-0 flex-col gap-3 overflow-y-auto border-r border-sidebar-border bg-card p-4">
       <div className="mb-2 flex items-center justify-between px-2">
         <h2 className="text-lg font-bold text-sidebar-foreground">{title}</h2>
-        <ThemeToggle />
-      </div>
+          <ThemeToggle />
+        </div>
+        <MusicPlayer />
 
-      <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1">
         {items.map((item) => (
           <button
             key={item.id}

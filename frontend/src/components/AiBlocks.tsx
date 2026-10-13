@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { ContentBlock } from "@/lib/preflightStream";
+import YouTubeEmbed from "@/components/media/YouTubeEmbed";
 
 export function extractYouTubeId(url: string): string | null {
   const m = url.match(
@@ -148,13 +149,11 @@ export function LinkifiedText({ text, className }: { text: string; className?: s
     const id = extractYouTubeId(url);
     if (id) {
       nodes.push(
-        <iframe
+        <YouTubeEmbed
           key={i++}
-          src={`https://www.youtube.com/embed/${id}`}
+          videoId={id}
           title={label}
-          className="my-2 aspect-video w-full max-w-[420px] rounded-md border"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
+          className="my-2"
         />
       );
     } else {

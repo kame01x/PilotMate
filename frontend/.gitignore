@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# background music files (supplied locally — never commit audio)
+/public/audio/*.mp3

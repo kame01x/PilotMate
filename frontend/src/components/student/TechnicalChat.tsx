@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import AnswerView from "@/components/answer/AnswerView";
 import type { Exercise } from "./technicalData";
 
 interface ChatTurn {
@@ -117,8 +118,12 @@ export default function TechnicalChat({ exercise, onCustomTopic }: Props) {
         )}
         {turns.map((turn, i) => (
           <div key={i} className={turn.role === "user" ? "self-end max-w-[85%]" : "self-start max-w-[85%]"}>
-            <div className={turn.role === "user" ? "rounded-md bg-primary px-3 py-2 text-primary-foreground" : "rounded-md border border-border bg-background px-3 py-2"}>
-              <div className="text-sm leading-relaxed whitespace-pre-wrap">{turn.text}</div>
+            <div className={turn.role === "user" ? "rounded-md bg-primary px-3 py-2 text-primary-foreground" : "rounded-lg border border-border bg-background px-3 py-2.5"}>
+              {turn.role === "user" ? (
+                <div className="text-sm leading-relaxed whitespace-pre-wrap">{turn.text}</div>
+              ) : (
+                <AnswerView text={turn.text} />
+              )}
               {turn.notice && (
                 <div className="mt-2 rounded-sm border border-caution/40 bg-caution/10 px-2 py-1 text-xs text-caution">
                   {turn.notice}

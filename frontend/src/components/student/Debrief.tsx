@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ChatPanel, { ChatTurn } from "@/components/ChatPanel";
+import AnswerView from "@/components/answer/AnswerView";
 import { apiFetch } from "@/lib/api";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -64,7 +65,9 @@ export default function Debrief() {
               {saved.coaching_notes && (
                 <>
                   <h4 className="mt-3 font-medium">Coaching notes</h4>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{saved.coaching_notes}</p>
+                  <div className="text-muted-foreground">
+                    <AnswerView text={saved.coaching_notes} />
+                  </div>
                 </>
               )}
             </CardContent>

@@ -16,24 +16,51 @@ PREFERRED_VIDEO_SOURCES = ["boldmethod", "aopa", "pilotinstitute", "eaa", "fligh
 
 
 def find_reference_video(topic: str) -> dict:
+    """Search Tavily for an instructional video, then keep ONLY real YouTube
+    videos confirmed by YouTube's public oEmbed endpoint (no API key needed).
+
+    Verified metadata (real title/channel) is returned so the frontend can
+    embed the video with confidence; hallucinated or dead links never reach
+    the answer. Return shape is unchanged: {"videos": [{"title", "url"}], "notice"}.
+    """
     if not TAVILY_API_KEY:
         return {"error": "TAVILY_API_KEY not configured.", "notice": "Verify against the student's official syllabus."}
     try:
         from tavily import TavilyClient
 
         client = TavilyClient(api_key=TAVILY_API_KEY)
-        results = client.search(query=f"{topic} flight training instructional video", max_results=5)
+        results = client.search(query=f"{topic} flight training instructional video", max_results=6)
     except Exception as exc:
         return {"error": str(exc), "notice": "Verify against the student's official syllabus."}
-    relevant = []
+
+    # Reuse the pre-flight pipeline's keyless YouTube verification helpers.
+    from backend.preflight.data import _oembed_sync, extract_youtube_id
+
+    eligible = []  # (preferred, entry) — preferred training channels first
     for r in results.get("results", []):
-        url = (r.get("url") or "").lower()
-        title = (r.get("title") or "").lower()
-        if any(src in url or src in title for src in PREFERRED_VIDEO_SOURCES) or topic.lower().split()[0] in title:
-            relevant.append({"title": r.get("title"), "url": r.get("url")})
+        vid = extract_youtube_id(r.get("url") or "")
+        if not vid:
+            continue  # not an embeddable YouTube video
+        meta = _oembed_sync(vid)
+        # oEmbed reports type "video" for real videos; anything else is
+        # deleted, private, a playlist, or not a video at all.
+        if not meta or meta.get("type") != "video":
+            continue
+        channel = (meta.get("author_name") or "").lower()
+        title = (meta.get("title") or "").lower()
+        preferred = any(src in channel or src in title for src in PREFERRED_VIDEO_SOURCES)
+        if not (preferred or topic.lower().split()[0] in title):
+            continue
+        eligible.append((preferred, {
+            "title": meta.get("title") or r.get("title"),
+            "url": f"https://www.youtube.com/watch?v={vid}",
+            "channel": meta.get("author_name"),
+        }))
+    eligible.sort(key=lambda pair: not pair[0])  # preferred channels first
+    relevant = [entry for _, entry in eligible[:2]]
     if not relevant:
         return {"error": f"No clearly relevant instructional video found for '{topic}'. Check the official flight-training sources manually."}
-    return {"videos": relevant, "notice": "Reference suggestion only — instructor/student picks the final resource."}
+    return {"videos": relevant, "notice": "Verified YouTube videos (existence checked via oEmbed) — reference suggestion only; instructor/student picks the final resource."}
 
 
 def log_technical_exchange(student_id: str, flight_id: int | None, topic: str,

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
+import MusicPlayer from "@/components/music/MusicPlayer";
 
 export type SidebarItem = { id: string; label: string; iconPath: string };
 
@@ -37,6 +38,7 @@ export default function Shell({
           <h2 className="text-lg font-bold text-sidebar-foreground">PilotMate</h2>
           <ThemeToggle />
         </div>
+        <MusicPlayer />
         <nav className="flex flex-col gap-4">
           {items.map((item) => {
             const isActive = active === item.id;

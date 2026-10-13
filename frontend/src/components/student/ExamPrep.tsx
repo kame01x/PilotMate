@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ChatPanel, { type ChatTurn } from "@/components/ChatPanel";
+import AnswerView from "@/components/answer/AnswerView";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,7 +63,9 @@ export default function ExamPrep({ selected }: { selected: string | null }) {
       {error && <p className="text-sm text-destructive">{error}</p>}
       {selected && message && (
         <Card>
-          <CardContent className="py-4 text-sm">{message}</CardContent>
+          <CardContent className="py-4">
+            <AnswerView text={message} />
+          </CardContent>
         </Card>
       )}
 

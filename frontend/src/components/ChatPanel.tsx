@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LinkifiedText } from "@/components/AiBlocks";
+import AnswerView from "@/components/answer/AnswerView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -64,14 +64,16 @@ export default function ChatPanel({
       <div className="flex max-h-96 flex-col gap-2 overflow-y-auto rounded-md border bg-card p-3">
         {turns.length === 0 && <p className="text-sm text-muted-foreground">{placeholder}</p>}
         {turns.map((turn, i) => (
-          <div key={i} className={turn.role === "user" ? "self-end max-w-[85%]" : "self-start max-w-[85%]"}>
-            <div className={turn.role === "user" ? "rounded-md bg-primary px-3 py-2 text-primary-foreground" : "rounded-md border border-border bg-card px-3 py-2"}>
+          <div key={i} className={turn.role === "user" ? "self-end max-w-[85%]" : "w-[95%] max-w-[52rem] self-start"}>
+            <div className={turn.role === "user" ? "rounded-md bg-primary px-3 py-2 text-primary-foreground" : "rounded-lg border border-border bg-card px-3 py-2.5 sm:px-4"}>
               {turn.meta && Object.entries(turn.meta).map(([k, v]) => (
                 <Badge key={k} variant="outline" className="mr-1 mb-1">{k}: {v}</Badge>
               ))}
-              <div className="whitespace-pre-wrap text-sm">
-                <LinkifiedText text={turn.text} />
-              </div>
+              {turn.role === "user" ? (
+                <div className="whitespace-pre-wrap text-sm">{turn.text}</div>
+              ) : (
+                <AnswerView text={turn.text} />
+              )}
               {turn.notice && (
                 <div className="mt-2 rounded-sm border border-caution/40 bg-caution/10 px-2 py-1 text-xs text-caution">
                   ⚠ {turn.notice}
