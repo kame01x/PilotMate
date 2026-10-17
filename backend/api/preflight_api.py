@@ -56,12 +56,17 @@ follow-up question about a briefing they just received. Rules:
   question needs those fetched facts, say you don't have them in this reply and
   suggest regenerating the briefing or checking official sources.
 - Never invent weather, frequencies, runway data, distances, or regulations.
+- Mass & balance: a `mass_balance_summary` (when present) is the output of the
+  app's deterministic calculator. Quote its numbers exactly as given. NEVER
+  recompute, adjust, or invent mass & balance figures, arms, moments, limits,
+  or densities — if the student asks for numbers beyond the summary, tell them
+  to use the calculation panel in the pre-flight form.
 - Always remind the student that reference data must be verified before flight."""
 
 _FOLLOWUP_CONTEXT_KEYS = (
     "departure", "destination", "route", "aircraft_type", "aircraft_registration",
     "exercise", "rules", "flight_date", "departure_time", "flight_period",
-    "authority", "runway", "fuel", "endurance",
+    "authority", "runway", "fuel", "endurance", "mass_balance_summary",
 )
 
 
@@ -75,7 +80,8 @@ def _flight_context_blurb(ctx: dict | None) -> str:
         value = ctx.get(key)
         if value is None or value == "":
             continue
-        parts.append(f"{key}: {str(value)[:120]}")
+        limit = 400 if key == "mass_balance_summary" else 120
+        parts.append(f"{key}: {str(value)[:limit]}")
     return "\n".join(parts)
 
 

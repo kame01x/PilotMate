@@ -30,6 +30,7 @@ export default function ChatPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sentInitial = useRef(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (initialMessage && !sentInitial.current) {
@@ -38,6 +39,12 @@ export default function ChatPanel({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (turns.length > 0 || loading) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [turns.length, loading]);
 
   async function send(text: string) {
     if (!text.trim() || loading) return;
@@ -61,7 +68,7 @@ export default function ChatPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex max-h-96 flex-col gap-2 overflow-y-auto rounded-md border bg-card p-3">
+      <div className="flex flex-col gap-2 rounded-md border bg-card p-3">
         {turns.length === 0 && <p className="text-sm text-muted-foreground">{placeholder}</p>}
         {turns.map((turn, i) => (
           <div key={i} className={turn.role === "user" ? "self-end max-w-[85%]" : "w-[95%] max-w-[52rem] self-start"}>
@@ -89,6 +96,7 @@ export default function ChatPanel({
             </div>
           </div>
         ))}
+        <div ref={bottomRef} aria-hidden="true" />
         {loading && <p className="text-sm text-muted-foreground">Thinking…</p>}
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}

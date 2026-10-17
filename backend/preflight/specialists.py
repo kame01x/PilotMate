@@ -151,24 +151,102 @@ def build_documents(ctx: FlightContext) -> BriefingSection:
 
 
 def build_mass_balance(ctx: FlightContext) -> BriefingSection:
-    blocks: list[dict] = []
-    if ctx.aircraft_registration:
-        blocks.append(paragraph(
-            f"Mass & balance must be calculated for {ctx.aircraft_registration} using the "
-            f"current weight schedule and POH/AFM data for the {ctx.aircraft_type or 'selected aircraft'}."
-        ))
-    else:
-        blocks.append(warning("No aircraft registration provided — a mass & balance "
-                              "calculation cannot be pre-filled."))
-    blocks.append(numbered([
-        "Obtain empty weight + CG from the latest weight schedule.",
-        "Add occupants and baggage using the actual loaded positions.",
-        "Add fuel loaded (kg/L) and convert with the correct density.",
-        "Plot total mass and CG on the envelope for the applicable flight phase.",
-        "Record the result in the aircraft's mass & balance document.",
-    ]))
-    if ctx.fuel or ctx.endurance:
-        blocks.append(kv([("Stated fuel", ctx.fuel or "—"), ("Stated endurance", ctx.endurance or "—")]))
+    """Render the deterministic mass & balance result computed by the form
+    (Phase 21B). The AI never produces these numbers — if the form didn't
+    send a result, fall back to the procedure checklist, clearly marked."""
+    mb = ctx.mass_balance
+    if not isinstance(mb, dict) or not mb:
+        blocks: list[dict] = []
+        if ctx.aircraft_registration:
+            blocks.append(paragraph(
+                f"Mass & balance must be calculated for {ctx.aircraft_registration} using the "
+                f"current weight schedule and POH/AFM data for the {ctx.aircraft_type or 'selected aircraft'}. "
+                "No calculation result was submitted with this briefing."
+            ))
+        else:
+            blocks.append(warning("No aircraft registration provided — a mass & balance "
+                                  "calculation cannot be pre-filled."))
+        blocks.append(numbered([
+            "Obtain empty weight + CG from the latest weight schedule.",
+            "Add occupants and baggage using the actual loaded positions.",
+            "Add fuel loaded (kg/L) and convert with the correct density.",
+            "Plot total mass and CG on the envelope for the applicable flight phase.",
+            "Record the result in the aircraft's mass & balance document.",
+        ]))
+        if ctx.fuel or ctx.endurance:
+            blocks.append(kv([("Stated fuel", ctx.fuel or "—"), ("Stated endurance", ctx.endurance or "—")]))
+        return BriefingSection(
+            section_id="mass_balance", title="Mass & Balance",
+            status=SectionStatus.OK, blocks=blocks,
+            notice=VERIFY_NOTICE,
+        )
+
+    state = mb.get("state")
+    units = mb.get("units") or {}
+    mass_u = units.get("mass", "")
+    arm_u = units.get("arm", "")
+    mom_u = units.get("moment", "")
+    blocks = []
+
+    state_labels = {
+        "complete_within": "Calculation complete — all values within limits.",
+        "complete_outside": "Calculation complete — LIMIT EXCEEDED (see violations).",
+        "incomplete": "Calculation incomplete — required data is missing.",
+        "unverifiable": "Calculation complete but UNVERIFIABLE — compliance cannot be "
+                        "confirmed from the data on file.",
+    }
+    blocks.append(paragraph(state_labels.get(state, f"State: {state}")))
+
+    for reason in mb.get("reasons") or []:
+        blocks.append(warning(str(reason)))
+    for violation in mb.get("violations") or []:
+        blocks.append(warning(str(violation.get("message") if isinstance(violation, dict) else violation)))
+
+    totals = mb.get("totals")
+    if totals:
+        rows: list[tuple[str, str]] = []
+        ds = mb.get("data_source") or {}
+        if ds.get("source"):
+            rows.append(("Data source", str(ds["source"])
+                         + (f" (rev {ds['revision']})" if ds.get("revision") else "")))
+        limits = mb.get("limits") or {}
+        if limits.get("max_mass"):
+            rows.append(("Max mass", f"{limits['max_mass']} {mass_u}"))
+        env_range = limits.get("envelope_cg_at_total_mass")
+        if env_range and env_range.get("min") is not None:
+            rows.append(("Allowed CG at total mass",
+                         f"{round(env_range['min'], 2)}–{round(env_range['max'], 2)} {arm_u}"))
+        rows.append(("Total mass", f"{round(totals.get('mass') or 0, 2)} {mass_u}"))
+        rows.append(("Total moment", f"{round(totals.get('moment') or 0, 1)} {mom_u}"))
+        rows.append(("CG", f"{round(totals.get('cg') or 0, 2)} {arm_u}"))
+        blocks.append(kv(rows))
+
+        item_lines = [
+            f"{it.get('label')}: {round(it.get('mass') or 0, 2)} {mass_u} @ "
+            f"{round(it.get('arm') or 0, 2)} {arm_u} = {round(it.get('moment') or 0, 1)} {mom_u}"
+            for it in (mb.get("items") or []) if isinstance(it, dict)
+        ]
+        if item_lines:
+            blocks.append(bullets(item_lines))
+
+        conditions = mb.get("conditions") or {}
+        cond_rows = []
+        for name in ("ramp", "takeoff", "zero_fuel", "landing"):
+            c = conditions.get(name)
+            if isinstance(c, dict) and c.get("mass") is not None:
+                cg_txt = f", CG {round(c['cg'], 2)} {arm_u}" if c.get("cg") is not None else ""
+                cond_rows.append((name.replace("_", " ").capitalize(),
+                                  f"{round(c['mass'], 2)} {mass_u}{cg_txt}"))
+        if cond_rows:
+            blocks.append(kv(cond_rows))
+
+    for notice in mb.get("notices") or []:
+        blocks.append(paragraph(f"Note: {notice}"))
+
+    chart = mb.get("chart") or {}
+    if not chart.get("included") and chart.get("reason"):
+        blocks.append(paragraph(f"Envelope chart: {chart['reason']}"))
+
     return BriefingSection(
         section_id="mass_balance", title="Mass & Balance",
         status=SectionStatus.OK, blocks=blocks,

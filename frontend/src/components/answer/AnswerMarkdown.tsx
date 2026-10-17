@@ -48,7 +48,7 @@ function Anchor({ href, label }: { href: string; label: ReactNode }) {
   if (yt) {
     return (
       <span className="my-2 block">
-        <YouTubeEmbed videoId={yt} title={typeof label === "string" ? label : href} />
+        <YouTubeEmbed videoId={yt} title={typeof label === "string" ? label : href} sourceUrl={href} />
       </span>
     );
   }
@@ -204,7 +204,7 @@ function ParagraphBlock({ block }: { block: Extract<Block, { type: "paragraph" }
     if (yt) {
       return (
         <span className="my-1 block">
-          <YouTubeEmbed videoId={yt} title={link[1] ?? url} />
+          <YouTubeEmbed videoId={yt} title={link[1] ?? url} sourceUrl={url} />
         </span>
       );
     }

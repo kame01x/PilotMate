@@ -182,3 +182,31 @@ class Document(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class Aircraft(Base):
+    """Registration-specific weight schedule for mass & balance (Phase 21B).
+
+    The numeric structure lives in `schedule` (mass/arm units, empty mass and
+    arm or moment, limits, loading stations, fuel tanks, optional CG envelope).
+    Provenance (`source`, `revision`) is first-class: without it a calculation
+    is reported as UNVERIFIABLE, never silently trusted. `verified` marks
+    instructor approval; generic or AI-invented values are never stored here.
+    """
+
+    __tablename__ = "aircraft"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    registration: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    aircraft_type: Mapped[str | None] = mapped_column(String(100))
+    schedule: Mapped[dict | list | None] = mapped_column(JSON)
+    source: Mapped[str | None] = mapped_column(String(300))
+    revision: Mapped[str | None] = mapped_column(String(100))
+    verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    owner_student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    owner: Mapped["Student | None"] = relationship("Student")

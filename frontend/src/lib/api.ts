@@ -1,6 +1,9 @@
 "use client";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Same-origin proxy path (see rewrites in next.config.ts) — the Next server
+// forwards to the loopback backend. Avoids CORS, IPv6/localhost quirks, and
+// LAN-IP mismatches. Override with a full URL only for remote backends.
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api-proxy";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -32,8 +35,9 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  } catch {
-    throw new Error(`Cannot reach the backend at ${API_URL}. Is it running?`);
+  } catch (e) {
+    const cause = e instanceof Error ? e.message : String(e);
+    throw new Error(`Cannot reach the backend at ${API_URL}. Is it running? (${cause})`);
   }
   if (res.status === 401) {
     setToken(null);
@@ -44,7 +48,13 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const detail = (data as any).detail;
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail ?? data));
+    const message =
+      typeof detail === "string"
+        ? detail
+        : detail != null
+          ? JSON.stringify(detail)
+          : `Request failed with HTTP ${res.status}`;
+    throw new Error(message);
   }
   return data;
 }

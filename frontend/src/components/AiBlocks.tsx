@@ -4,9 +4,14 @@ import type { ReactNode } from "react";
 import type { ContentBlock } from "@/lib/preflightStream";
 import YouTubeEmbed from "@/components/media/YouTubeEmbed";
 
+/**
+ * Extract a YouTube video ID (exactly 11 chars) from any common URL form:
+ * watch?v=, watch?...&v=, youtu.be/, shorts/, embed/, v/, live/.
+ * Truncated/invalid IDs are rejected (Phase 21A) — never embed a broken player.
+ */
 export function extractYouTubeId(url: string): string | null {
   const m = url.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtube\.com\/v\/)([A-Za-z0-9_-]{6,})/
+    /(?:youtube\.com\/watch\?(?:[^#\s]*&)?v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/live\/)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/
   );
   return m ? m[1] : null;
 }
@@ -33,19 +38,43 @@ export function asText(value: unknown): string {
   return String(value);
 }
 
-/** Verified video card: thumbnail-first, embeds only oEmbed-confirmed videos. */
+/**
+ * Verified video card: embeds the real player when the block carries a valid
+ * YouTube ID (Phase 21A — a thumbnail alone never counts), keeping the
+ * title/channel/snippet metadata and the external link. Falls back to the
+ * thumbnail + link only when no embeddable ID can be derived.
+ */
 export function VideoCard({ block }: { block: Extract<ContentBlock, { type: "video" }> }) {
+  const ytId =
+    (block.video_id && /^[A-Za-z0-9_-]{11}$/.test(block.video_id) && block.video_id) ||
+    extractYouTubeId(block.url) ||
+    extractYouTubeId(block.embed_url) ||
+    null;
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border bg-card p-3 sm:flex-row">
-      {block.thumbnail_url && (
-        <a href={block.url} target="_blank" rel="noreferrer" className="block shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={block.thumbnail_url}
-            alt={block.title ?? "Training video"}
-            className="aspect-video w-full max-w-[220px] rounded-md border object-cover"
+    <div
+      className={`flex flex-col gap-2 rounded-md border border-border bg-card p-3 ${
+        ytId ? "" : "sm:flex-row"
+      }`}
+    >
+      {ytId ? (
+        <div className="w-full sm:max-w-[480px]">
+          <YouTubeEmbed
+            videoId={ytId}
+            title={block.title ?? "Training video"}
+            sourceUrl={block.url}
           />
-        </a>
+        </div>
+      ) : (
+        block.thumbnail_url && (
+          <a href={block.url} target="_blank" rel="noreferrer" className="block shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={block.thumbnail_url}
+              alt={block.title ?? "Training video"}
+              className="aspect-video w-full max-w-[220px] rounded-md border object-cover"
+            />
+          </a>
+        )
       )}
       <div className="flex min-w-0 flex-col gap-1">
         <a href={block.url} target="_blank" rel="noreferrer" className="font-medium text-foreground hover:underline">
@@ -153,6 +182,7 @@ export function LinkifiedText({ text, className }: { text: string; className?: s
           key={i++}
           videoId={id}
           title={label}
+          sourceUrl={url}
           className="my-2"
         />
       );

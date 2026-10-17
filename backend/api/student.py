@@ -66,7 +66,10 @@ def debrief(body: DebriefMessage, student: Student = Depends(get_current_student
                 raise HTTPException(404, "Flight not found for this student")
         finally:
             session.close()
-    agent = get_debrief_agent(student.student_id, flight_id=body.flight_id)
+    try:
+        agent = get_debrief_agent(student.student_id, flight_id=body.flight_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
     return {"response": agent.chat(body.message), "notice": getattr(agent._chat, "last_notice", None)}
 
 

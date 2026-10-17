@@ -121,15 +121,17 @@ class DebriefAgent:
             if student is None:
                 raise ValueError(f"Student {student_id} not found")
             if flight_id is None:
+                # Latest flight, or None when the student has none — the agent
+                # then runs in general-conversation mode (still answerable).
                 flight = (
                     session.query(Flight).filter_by(student_id=student.id)
                     .order_by(Flight.date.desc()).first()
                 )
             else:
                 flight = session.query(Flight).filter_by(id=flight_id, student_id=student.id).first()
-            if flight is None:
-                raise ValueError("No flight found for this student")
-            package = session.query(PreflightPackage).filter_by(flight_id=flight.id).first()
+                if flight is None:
+                    raise ValueError("Flight not found for this student")
+            package = session.query(PreflightPackage).filter_by(flight_id=flight.id).first() if flight else None
             self._student_pk = student.id
             self._student_name = student.name
             self._authority = student.authority
@@ -138,16 +140,25 @@ class DebriefAgent:
         finally:
             session.close()
 
-        self._technical_groups = _group_technical_logs(self._student_pk, self._flight.id)
+        self._technical_groups = _group_technical_logs(
+            self._student_pk, self._flight.id if self._flight else None
+        )
+
+        def _save_debrief(**kw):
+            if self._flight is None:
+                return {"error": "No flight is linked to this conversation — a debrief can only be saved for a logged flight."}
+            return save_debrief(flight_id=self._flight.id, student_pk=self._student_pk, **kw)
 
         impls = {
-            "save_debrief": lambda **kw: save_debrief(flight_id=self._flight.id, student_pk=self._student_pk, **kw),
+            "save_debrief": _save_debrief,
             "open_instructor_chat": lambda: open_instructor_chat(student_pk=self._student_pk),
         }
         self._chat = GeminiChat(self._system_prompt(), _build_tool_declarations(), impls)
 
     def _flight_summary(self) -> str:
         f = self._flight
+        if f is None:
+            return "(no flight selected)"
         return (
             f"Flight {f.flight_id}: {f.date:%Y-%m-%d}, {f.departure_airport} -> {f.destination_airport or 'local'}, "
             f"route={f.route}, aircraft={f.aircraft_type}, exercise={f.exercise_type}, "
@@ -159,6 +170,20 @@ class DebriefAgent:
             f"- {topic}: " + "; ".join(dict.fromkeys(points))[:400]
             for topic, points in self._technical_groups.items()
         ) or "- (none logged)"
+
+        if self._flight is None:
+            return f"""You are PilotMate's Debrief Agent. Student: {self._student_name} (authority: {self._authority}).
+
+The student has no logged flights yet, so there is no specific post-flight to debrief. Technical coaching logged (grouped by topic):
+{tech}
+
+Behavior:
+- You can still hold a normal, helpful conversation: answer flight-training questions, reflect on their training progress, and encourage them to fly and log a flight so a proper post-flight debrief becomes possible.
+- NEVER deliver a performance verdict or diagnose the student. No clinical or absolute language. The instructor (human) makes authoritative judgments.
+- Do not speculate about psychology; ground anything you say in what the student actually told you.
+- Do NOT call save_debrief — there is no flight to attach it to.
+- If the student opens instructor chat, call open_instructor_chat and share the returned thread summary."""
+
         package_brief = "available" if self._package else "not recorded"
         return f"""You are PilotMate's Debrief Agent. Student: {self._student_name} (authority: {self._authority}).
 

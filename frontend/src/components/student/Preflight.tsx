@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import ChatPanel, { ChatTurn } from "@/components/ChatPanel";
 import BriefingReport from "@/components/preflight/BriefingReport";
+import MassBalanceSection from "@/components/preflight/MassBalanceSection";
 import { apiFetch } from "@/lib/api";
+import { mbSummary, type MBResult } from "@/lib/massBalance";
 import {
   cancelPreflight,
   streamPreflight,
@@ -206,6 +208,14 @@ export default function Preflight() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [showFollowUp, setShowFollowUp] = useState(false);
 
+  // Mass & balance: the section registers a calc function here so submit can
+  // run a fresh deterministic calculation at submit time (never stale).
+  const [mbResult, setMbResult] = useState<MBResult | null>(null);
+  const calcRef = useRef<(() => Promise<MBResult | null>) | null>(null);
+  const handleMbReady = useCallback((calc: () => Promise<MBResult | null>) => {
+    calcRef.current = calc;
+  }, []);
+
   const generationIdRef = useRef<string | null>(null);
   const streamAbortRef = useRef<(() => void) | null>(null);
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -304,8 +314,15 @@ export default function Preflight() {
     }
   }
 
-  function submit() {
+  async function submit() {
     if (!canSubmit) return;
+    // Fresh deterministic mass & balance at submit time (null when there is no
+    // registration/schedule — the briefing then falls back to the checklist).
+    let freshMb: MBResult | null = null;
+    if (calcRef.current) {
+      freshMb = await calcRef.current();
+    }
+    setMbResult(freshMb);
     resetBriefingState();
     setStarted(true);
     // Capture the epoch token minted by resetBriefingState; events from any
@@ -332,6 +349,7 @@ export default function Preflight() {
       departure_controlled: depControlled === "controlled",
       destination_runway_surface: destination ? destRunwaySurface : undefined,
       destination_controlled: destination ? destControlled === "controlled" : undefined,
+      mass_balance: freshMb ?? undefined,
     };
     const stream = streamPreflight(payload, {
       onEvent: (event) => {
@@ -389,6 +407,7 @@ export default function Preflight() {
           runway: runway || undefined,
           fuel: fuel || undefined,
           endurance: endurance || undefined,
+          mass_balance_summary: mbResult ? mbSummary(mbResult) : undefined,
         },
       }),
     });
@@ -671,6 +690,12 @@ export default function Preflight() {
             </div>
           </CardContent>
         </Card>
+
+        <MassBalanceSection
+          registration={aircraftRegistration}
+          aircraftType={aircraftType}
+          onReady={handleMbReady}
+        />
 
         <Card>
           <CardHeader>

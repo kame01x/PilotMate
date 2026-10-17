@@ -72,6 +72,9 @@ class BriefingRequest(BaseModel):
     departure_controlled: bool | None = None
     destination_runway_surface: Literal["grass", "concrete"] | None = None
     destination_controlled: bool | None = None
+    # Deterministic mass & balance result computed by the form (Phase 21B).
+    # Optional: older clients don't send it; the AI never produces it.
+    mass_balance: dict | None = None
 
     @field_validator("departure")
     @classmethod
@@ -102,6 +105,7 @@ class FlightContext(BaseModel):
     dep_controlled: bool | None
     dest_surface: str | None
     dest_controlled: bool | None
+    mass_balance: dict | None = None
     submitted_message: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -128,6 +132,7 @@ class FlightContext(BaseModel):
             dep_controlled=req.departure_controlled,
             dest_surface=req.destination_runway_surface,
             dest_controlled=req.destination_controlled,
+            mass_balance=req.mass_balance,
             submitted_message=req.message,
         )
 

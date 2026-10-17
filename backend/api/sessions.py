@@ -23,7 +23,9 @@ def get_technical_agent(student_id: str) -> TechnicalAgent:
 
 
 def get_debrief_agent(student_id: str, flight_id: int | None = None) -> DebriefAgent:
-    key = ("debrief", student_id)
+    # Key includes flight_id — selecting a different flight must rebuild the
+    # agent so its context/prompt reflects that flight, not a cached one.
+    key = ("debrief", student_id, flight_id)
     if key not in _sessions:
         _sessions[key] = DebriefAgent(student_id, flight_id=flight_id)
     return _sessions[key]
