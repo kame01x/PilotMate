@@ -25,6 +25,7 @@ class Student(Base):
     )
     email: Mapped[str | None] = mapped_column(String(200), unique=True, nullable=True)
     hashed_password: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    account_status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -46,6 +47,7 @@ class Instructor(Base):
     school: Mapped[str | None] = mapped_column(String(200))
     email: Mapped[str | None] = mapped_column(String(200), unique=True, nullable=True)
     hashed_password: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    account_status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -210,3 +212,44 @@ class Aircraft(Base):
     )
 
     owner: Mapped["Student | None"] = relationship("Student")
+
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class Invite(Base):
+    __tablename__ = "invites"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_by_admin_id: Mapped[int] = mapped_column(ForeignKey("admin_users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    used_by_user_id: Mapped[int | None] = mapped_column(nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int] = mapped_column(nullable=False)
+    actor_role: Mapped[str] = mapped_column(String(20), nullable=False)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    target_id: Mapped[int | None] = mapped_column(nullable=True)
+    target_type: Mapped[str | None] = mapped_column(String(50))
+    metadata_json: Mapped[dict | list | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -8,10 +8,14 @@ from pydantic import BaseModel
 
 from agents.instructor import get_conversation, instructor_run_preflight, instructor_send, link_student
 from backend.api.deps import get_current_instructor
+from backend.api.ratelimit import rate_limit
+from backend.config import RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW
 from backend.database import SessionLocal
 from backend.models import Instructor, Student
 
 router = APIRouter(prefix="/instructor", tags=["instructor"])
+
+_ai_limit = rate_limit(RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW)
 
 
 class LinkBody(BaseModel):
@@ -90,7 +94,7 @@ def read_thread(student_id: str, instructor: Instructor = Depends(get_current_in
 
 
 @router.post("/preflight")
-def preflight(body: PreflightBody, instructor: Instructor = Depends(get_current_instructor)):
+def preflight(body: PreflightBody, instructor: Instructor = Depends(get_current_instructor), _: None = Depends(_ai_limit)):
     student = _student_by_business_id(body.student_id)
     try:
         response_text = instructor_run_preflight(_instructor_pk(instructor), student.id, body.message)

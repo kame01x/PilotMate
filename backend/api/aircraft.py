@@ -92,6 +92,8 @@ def get_aircraft(registration: str, student: Student = Depends(get_current_stude
         ac = db.query(Aircraft).filter(Aircraft.registration == reg).first()
         if ac is None:
             raise HTTPException(status_code=404, detail=f"No weight schedule on file for {reg}")
+        if ac.owner_student_id != student.id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this aircraft")
         return _schedule_payload(ac)
     finally:
         db.close()
@@ -110,6 +112,9 @@ def put_aircraft(registration: str, body: ScheduleBody,
         if ac is None:
             ac = Aircraft(registration=reg, owner_student_id=student.id)
             db.add(ac)
+        else:
+            if ac.owner_student_id != student.id:
+                raise HTTPException(status_code=403, detail="Not authorized to modify this aircraft")
         ac.aircraft_type = (body.aircraft_type or "").strip() or ac.aircraft_type
         ac.schedule = body.schedule
         ac.source = (body.source or "").strip() or None
@@ -128,6 +133,8 @@ def calculate_mass_balance(body: CalculateBody, student: Student = Depends(get_c
     db = SessionLocal()
     try:
         ac = db.query(Aircraft).filter(Aircraft.registration == reg).first()
+        if ac is not None and ac.owner_student_id != student.id:
+            raise HTTPException(status_code=403, detail="Not authorized to use this aircraft")
         result = calculate(
             ac.schedule if ac else None,
             registration=reg,

@@ -43,6 +43,8 @@ def _get_model(payload: dict, role: str):
         row = session.query(model).filter(getattr(model, field) == business_id).first()
         if row is None:
             raise HTTPException(status_code=401, detail="Account not found")
+        if row.account_status != "active":
+            raise HTTPException(status_code=401, detail="Account is not active")
         session.expunge(row)
         return row
     finally:
@@ -61,4 +63,5 @@ def get_current_user(payload: dict = Depends(get_payload)):
     role = payload.get("role")
     if role not in ("student", "instructor"):
         raise HTTPException(status_code=403, detail="Unknown role")
+    _get_model(payload, role)
     return {"role": role, "id": payload.get("sub")}

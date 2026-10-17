@@ -9,13 +9,17 @@ from pydantic import BaseModel
 
 from agents.instructor import get_conversation
 from backend.api.deps import get_current_student, get_current_user
+from backend.api.ratelimit import rate_limit
 from backend.api.sessions import get_debrief_agent, get_preflight_agent, get_router_agent, get_technical_agent
+from backend.config import RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW
 from backend.database import SessionLocal
 from backend.models import Debrief, Flight, Student
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/student", tags=["student"])
+
+_ai_limit = rate_limit(RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW)
 
 
 class ChatMessage(BaseModel):
@@ -31,7 +35,7 @@ class DebriefMessage(BaseModel):
 
 
 @router.post("/chat")
-def chat(body: ChatMessage, student: Student = Depends(get_current_student)):
+async def chat(body: ChatMessage, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
     agent = get_router_agent(student.student_id)
     result = agent.chat(body.message)
     notice = getattr(agent._classifier, "last_notice", None)
@@ -51,13 +55,13 @@ def chat(body: ChatMessage, student: Student = Depends(get_current_student)):
 
 
 @router.post("/technical")
-def technical(body: ChatMessage, student: Student = Depends(get_current_student)):
+async def technical(body: ChatMessage, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
     agent = get_technical_agent(student.student_id)
     return {"response": agent.chat(body.message), "notice": getattr(agent._chat, "last_notice", None)}
 
 
 @router.post("/debrief")
-def debrief(body: DebriefMessage, student: Student = Depends(get_current_student)):
+async def debrief(body: DebriefMessage, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
     if body.flight_id is not None:
         session = SessionLocal()
         try:

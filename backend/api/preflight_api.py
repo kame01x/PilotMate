@@ -21,6 +21,8 @@ from pydantic import BaseModel
 
 from agents.gemini_chat import GeminiChat
 from backend.api.deps import get_current_student
+from backend.api.ratelimit import rate_limit
+from backend.config import RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW
 from backend.models import Student
 from backend.preflight.contracts import BriefingRequest
 from backend.preflight.orchestrator import (
@@ -33,6 +35,8 @@ from backend.preflight.orchestrator import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/student", tags=["student"])
+
+_ai_limit = rate_limit(RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW)
 
 
 class CancelBody(BaseModel):
@@ -86,16 +90,16 @@ def _flight_context_blurb(ctx: dict | None) -> str:
 
 
 @router.post("/preflight")
-async def preflight_v2(body: BriefingRequest, student: Student = Depends(get_current_student)):
+async def preflight_v2(body: BriefingRequest, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
     """Structured briefing. HTTP 200 always carries a full result object —
     sections may be failed/unavailable (explicit), but the body is never null."""
     logger.info("Preflight v2 request from student %s: %s -> %s",
                 student.student_id, body.departure, body.destination)
     try:
         result = await run_briefing_json(body.model_dump())
-    except Exception as exc:  # noqa: BLE001 — pipeline failure => explicit 502, never 200-null
+    except Exception as exc:  # noqa: BLE001
         logger.error("Preflight v2 pipeline failed for %s: %s", student.student_id, exc, exc_info=True)
-        raise HTTPException(status_code=502, detail=f"Pre-flight pipeline error: {exc}")
+        raise HTTPException(status_code=502, detail="Pre-flight pipeline error")
     text = build_result_text(result)
     logger.info("Preflight v2 %s status=%s sections=%s chars=%d",
                 result.generation_id, result.status.value, result.summary(), len(text))
@@ -110,7 +114,7 @@ async def preflight_v2(body: BriefingRequest, student: Student = Depends(get_cur
 
 
 @router.post("/preflight/stream")
-async def preflight_stream(body: BriefingRequest, student: Student = Depends(get_current_student)):
+async def preflight_stream(body: BriefingRequest, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
     """SSE stream of progressive section events. Emits generation_started,
     section_started/completed/unavailable/failed, generation_completed/failed.
     Every frame carries generation_id so the client can ignore stale streams."""
@@ -143,7 +147,7 @@ def preflight_cancel(body: CancelBody, student: Student = Depends(get_current_st
 
 
 @router.post("/preflight/follow-up")
-def preflight_follow_up(body: FollowUpBody, student: Student = Depends(get_current_student)):
+async def preflight_follow_up(body: FollowUpBody, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
     """Conversational follow-up about a previous briefing. The client re-sends
     the compact flight context it already holds (form state), so answers stay
     tied to the student's actual flight plan without server-side session state."""
@@ -156,7 +160,7 @@ def preflight_follow_up(body: FollowUpBody, student: Student = Depends(get_curre
         text = chat.chat(prompt)
     except Exception as exc:  # noqa: BLE001
         logger.error("Preflight follow-up failed for %s: %s", student.student_id, exc, exc_info=True)
-        raise HTTPException(status_code=502, detail=f"Follow-up failed: {exc}")
+        raise HTTPException(status_code=502, detail="Follow-up failed")
     if not text or not text.strip():
         raise HTTPException(status_code=502, detail="Follow-up returned an empty reply.")
     return {"response": text, "notice": chat.last_notice}
@@ -169,7 +173,7 @@ requiring pilot verification."""
 
 
 @router.post("/preflight/suggest-route")
-def suggest_route(body: dict, student: Student = Depends(get_current_student)):
+def suggest_route(body: dict, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
     departure = body.get("departure", "")
     destination = body.get("destination") or None
     aircraft_type = body.get("aircraft_type", "Cessna 172")
