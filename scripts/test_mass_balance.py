@@ -380,6 +380,15 @@ def run_engine_cases() -> None:
           any("default_fuel_density_unit" in p for p in validate_schedule(
               demo_schedule(default_fuel_density_unit=None))),
           "missing-unit schedule accepted")
+    check("fixture validation: min_cg > max_cg rejected",
+          any("min_cg" in p for p in validate_schedule(
+              demo_schedule(min_cg=50.0, max_cg=40.0))),
+          "inverted CG limits accepted")
+    check("fixture validation: negative capacity_l rejected",
+          any("capacity_l" in p for p in validate_schedule(
+              {"mass_unit": "kg", "arm_unit": "cm", "empty_mass": 780.0, "empty_arm": 110.0,
+               "stations": [{"id": "f", "label": "F", "arm": 110.0, "kind": "fuel", "capacity_l": -5.0}]})),
+          "negative capacity accepted")
 
 
 def run_api_cases() -> None:

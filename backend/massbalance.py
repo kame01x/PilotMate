@@ -111,6 +111,10 @@ def validate_schedule(schedule: dict | None) -> list[str]:
     max_mass = _to_float(schedule.get("max_mass"))
     if max_mass is not None and max_mass <= 0:
         problems.append("max_mass must be a positive number")
+    min_cg = _to_float(schedule.get("min_cg"))
+    max_cg = _to_float(schedule.get("max_cg"))
+    if min_cg is not None and max_cg is not None and min_cg > max_cg:
+        problems.append("min_cg must be <= max_cg")
     stations = schedule.get("stations")
     if stations is not None and not isinstance(stations, list):
         problems.append("stations must be a list")
@@ -138,6 +142,9 @@ def validate_schedule(schedule: dict | None) -> list[str]:
             smax = st.get("max_mass")
             if smax is not None and (_to_float(smax) is None or _to_float(smax) <= 0):
                 problems.append(f"stations[{i}] max_mass must be a positive number")
+            cap = st.get("capacity_l")
+            if cap is not None and (_to_float(cap) is None or _to_float(cap) <= 0):
+                problems.append(f"stations[{i}] capacity_l must be a positive number")
     envelope = schedule.get("envelope")
     if envelope is not None and not isinstance(envelope, list):
         problems.append("envelope must be a list")
