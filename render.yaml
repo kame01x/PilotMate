@@ -50,6 +50,7 @@ services:
         fromService:
           name: pilotmate-api-staging
           type: web
+          envVarKey: RENDER_EXTERNAL_URL
       - key: STAGING_AUTH_USER
         sync: false
       - key: STAGING_AUTH_PASS
