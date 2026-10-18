@@ -2,6 +2,7 @@ services:
   - type: web
     name: pilotmate-api-staging
     runtime: python
+    plan: free
     buildCommand: "uv sync"
     startCommand: "uv run uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT"
     envVars:
@@ -41,6 +42,7 @@ services:
   - type: web
     name: pilotmate-frontend-staging
     runtime: node
+    plan: free
     buildCommand: "cd frontend && npm install && npm run build"
     startCommand: "cd frontend && npm start"
     envVars:
@@ -59,5 +61,6 @@ services:
 
 databases:
   - name: pilotmate-staging-db
+    plan: free
     databaseName: pilotmate_staging
     ipAllowList: []
