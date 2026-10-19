@@ -8,9 +8,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
+from backend.access import VALID_SUB_STATUSES, get_latest_subscription
 from backend.api.deps import get_payload
 from backend.database import SessionLocal
-from backend.models import AdminUser, AuditLog, Instructor, Invite, Student
+from backend.models import AdminUser, AuditLog, Instructor, Invite, Student, Subscription
+
+import backend.config as config
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -40,6 +43,12 @@ class ExtendBody(BaseModel):
 
 class RevokeInviteBody(BaseModel):
     invite_id: int
+
+
+class BetaBody(BaseModel):
+    user_id: int
+    user_type: str = Field(pattern="^(student)$")
+    action: str = Field(pattern="^(grant|revoke)$")
 
 
 def _require_admin(payload: dict) -> AdminUser:
@@ -137,12 +146,20 @@ def list_users(admin: AdminUser = Depends(lambda payload=Depends(get_payload): _
     try:
         students = session.query(Student).order_by(Student.created_at.desc()).all()
         instructors = session.query(Instructor).order_by(Instructor.created_at.desc()).all()
+
+        def student_row(s: Student) -> dict:
+            sub = get_latest_subscription(session, s.id)
+            return {
+                "id": s.id, "business_id": s.student_id, "name": s.name, "email": s.email,
+                "account_status": s.account_status, "created_at": s.created_at.isoformat(),
+                "is_beta_tester": bool(s.is_beta_tester),
+                "subscription_status": sub.status if sub else None,
+                "subscription_valid": bool(sub and sub.status in VALID_SUB_STATUSES),
+                "has_access": bool(s.is_beta_tester) or bool(sub and sub.status in VALID_SUB_STATUSES),
+            }
+
         return {
-            "students": [
-                {"id": s.id, "business_id": s.student_id, "name": s.name, "email": s.email,
-                 "account_status": s.account_status, "created_at": s.created_at.isoformat()}
-                for s in students
-            ],
+            "students": [student_row(s) for s in students],
             "instructors": [
                 {"id": i.id, "business_id": i.instructor_id, "name": i.name, "email": i.email,
                  "account_status": i.account_status, "created_at": i.created_at.isoformat()}
@@ -216,3 +233,127 @@ def audit_log(admin: AdminUser = Depends(lambda payload=Depends(get_payload): _r
         ]
     finally:
         session.close()
+
+
+@router.get("/stats")
+def overview_stats(admin: AdminUser = Depends(lambda payload=Depends(get_payload): _require_admin(payload))):
+    session = SessionLocal()
+    try:
+        students = session.query(Student).all()
+        instructors = session.query(Instructor).all()
+        subs = session.query(Subscription).all()
+        latest_by_student: dict[int, Subscription] = {}
+        for sub in sorted(subs, key=lambda s: (s.updated_at, s.id)):
+            latest_by_student[sub.student_id] = sub
+
+        student_status_counts: dict[str, int] = {}
+        for s in students:
+            student_status_counts[s.account_status] = student_status_counts.get(s.account_status, 0) + 1
+        sub_status_counts: dict[str, int] = {}
+        for sub in latest_by_student.values():
+            sub_status_counts[sub.status] = sub_status_counts.get(sub.status, 0) + 1
+        active_subs = sum(
+            1 for sub in latest_by_student.values() if sub.status in VALID_SUB_STATUSES
+        )
+        pending_invites = session.query(Invite).filter(
+            Invite.used_at.is_(None), Invite.revoked_at.is_(None)
+        ).count()
+        return {
+            "total_users": len(students) + len(instructors),
+            "total_students": len(students),
+            "total_instructors": len(instructors),
+            "student_account_status": student_status_counts,
+            "active_subscribers": active_subs,
+            "free_beta_testers": sum(1 for s in students if s.is_beta_tester),
+            "subscription_status": sub_status_counts,
+            "pending_invites": pending_invites,
+        }
+    finally:
+        session.close()
+
+
+@router.post("/beta")
+def manage_beta(body: BetaBody, admin: AdminUser = Depends(lambda payload=Depends(get_payload): _require_admin(payload))):
+    session = SessionLocal()
+    try:
+        student = session.query(Student).filter_by(id=body.user_id).first()
+        if student is None:
+            raise HTTPException(status_code=404, detail="Student not found")
+        student.is_beta_tester = body.action == "grant"
+        session.commit()
+        email, business_id = student.email, student.student_id
+    finally:
+        session.close()
+    _audit(
+        admin.id, f"beta_{body.action}", target_id=body.user_id, target_type="student",
+        metadata={"email": email, "business_id": business_id},
+    )
+    return {"granted": body.action == "grant", "user_id": body.user_id,
+            "is_beta_tester": body.action == "grant"}
+
+
+@router.get("/subscriptions")
+def list_subscriptions(admin: AdminUser = Depends(lambda payload=Depends(get_payload): _require_admin(payload))):
+    session = SessionLocal()
+    try:
+        rows = session.query(Subscription).order_by(Subscription.updated_at.desc()).all()
+        return [
+            {
+                "id": sub.id, "student_id": sub.student_id,
+                "student": (
+                    {"business_id": sub.student.student_id, "name": sub.student.name,
+                     "email": sub.student.email, "is_beta_tester": bool(sub.student.is_beta_tester)}
+                    if sub.student else None
+                ),
+                "stripe_subscription_id": sub.stripe_subscription_id,
+                "stripe_customer_id": sub.stripe_customer_id,
+                "status": sub.status, "price_id": sub.price_id,
+                "cancel_at_period_end": sub.cancel_at_period_end,
+                "trial_end": sub.trial_end.isoformat() if sub.trial_end else None,
+                "current_period_start": sub.current_period_start.isoformat() if sub.current_period_start else None,
+                "current_period_end": sub.current_period_end.isoformat() if sub.current_period_end else None,
+                "canceled_at": sub.canceled_at.isoformat() if sub.canceled_at else None,
+                "ended_during_trial": sub.ended_during_trial,
+                "updated_at": sub.updated_at.isoformat(),
+            }
+            for sub in rows
+        ]
+    finally:
+        session.close()
+
+
+@router.get("/system-health")
+def system_health(admin: AdminUser = Depends(lambda payload=Depends(get_payload): _require_admin(payload))):
+    """Boolean/provider-config health only — never key or secret values."""
+    from sqlalchemy import text
+
+    db_ok = False
+    session = SessionLocal()
+    try:
+        session.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+    finally:
+        session.close()
+
+    secret = config.STRIPE_SECRET_KEY or ""
+    return {
+        "backend": {"status": "ok", "environment": config.ENVIRONMENT},
+        "database": {"connected": db_ok},
+        "ai_providers": {
+            "groq": bool(config.GROQ_API_KEY),
+            "gemini": bool(config.GEMINI_API_KEY),
+            "tavily": bool(config.TAVILY_API_KEY),
+            "huggingface": bool(config.HUGGINGFACE_API_KEY),
+            "ollama": bool(config.OLLAMA_HOST),
+        },
+        "stripe": {
+            "configured": bool(secret and config.STRIPE_PUBLISHABLE_KEY),
+            "webhook_configured": bool(config.STRIPE_WEBHOOK_SECRET),
+            "prices_configured": bool(config.STRIPE_PRICE_ID_MONTHLY or config.STRIPE_PRICE_ID_YEARLY),
+            "test_mode": bool(secret) and secret.startswith("sk_test_"),
+            "trial_days": config.STRIPE_TRIAL_DAYS,
+        },
+        "recent_errors": {"available": False, "entries": []},
+    }

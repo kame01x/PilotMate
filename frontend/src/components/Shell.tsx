@@ -13,6 +13,7 @@ export const STUDENT_ITEMS: SidebarItem[] = [
   { id: "preflight", label: "Pre-flight", iconPath: "M22 2 11 13 M22 2l-7 20-4-9-9-4 20-7z" },
   { id: "technical", label: "Technical", iconPath: "M22 12h-4l-3 9L9 3l-3 9H2z" },
   { id: "debrief", label: "Debriefing", iconPath: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" },
+  { id: "billing", label: "Billing", iconPath: "M2 8h20v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z M2 8l2-4h16l2 4M12 14v2" },
 ];
 
 export default function Shell({

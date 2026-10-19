@@ -8,11 +8,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+type Role = "student" | "instructor" | "admin";
+
+const ROLE_LABELS: Record<Role, string> = {
+  student: "Student",
+  instructor: "Instructor",
+  admin: "Admin",
+};
+
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const initialRole = params.get("role") === "instructor" ? "instructor" : "student";
-  const [role, setRoleState] = useState<"student" | "instructor">(initialRole);
+  const paramRole = params.get("role");
+  const initialRole: Role =
+    paramRole === "instructor" ? "instructor" : paramRole === "admin" ? "admin" : "student";
+  const [role, setRoleState] = useState<Role>(initialRole);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,9 +38,9 @@ function LoginForm() {
       });
       setToken(data.access_token);
       setRole(role);
-      router.push("/dashboard");
-    } catch (e: any) {
-      setError(e.message);
+      router.push(role === "admin" ? "/admin" : "/dashboard");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -38,11 +48,14 @@ function LoginForm() {
 
   return (
     <Card className="w-96">
-      <CardHeader><CardTitle>Log in — {role === "student" ? "Student" : "Instructor"}</CardTitle></CardHeader>
+      <CardHeader><CardTitle>Log in — {ROLE_LABELS[role]}</CardTitle></CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <div className="flex gap-2">
-          <Button variant={role === "student" ? "default" : "outline"} onClick={() => setRoleState("student")}>Student</Button>
-          <Button variant={role === "instructor" ? "default" : "outline"} onClick={() => setRoleState("instructor")}>Instructor</Button>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
+            <Button key={r} variant={role === r ? "default" : "outline"} onClick={() => setRoleState(r)}>
+              {ROLE_LABELS[r]}
+            </Button>
+          ))}
         </div>
         <div><Label>Email</Label><Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" /></div>
         <div><Label>Password</Label><Input value={password} onChange={(e) => setPassword(e.target.value)} type="password" /></div>

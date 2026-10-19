@@ -26,6 +26,8 @@ class Student(Base):
     email: Mapped[str | None] = mapped_column(String(200), unique=True, nullable=True)
     hashed_password: Mapped[str | None] = mapped_column(String(200), nullable=True)
     account_status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
+    is_beta_tester: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -36,6 +38,9 @@ class Student(Base):
     )
     flights: Mapped[list["Flight"]] = relationship("Flight", back_populates="student")
     debriefs: Mapped[list["Debrief"]] = relationship("Debrief", back_populates="student")
+    subscriptions: Mapped[list["Subscription"]] = relationship(
+        "Subscription", back_populates="student"
+    )
 
 
 class Instructor(Base):
@@ -253,3 +258,40 @@ class AuditLog(Base):
     target_type: Mapped[str | None] = mapped_column(String(50))
     metadata_json: Mapped[dict | list | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Subscription(Base):
+    """Stripe subscription record, persisted only from verified webhook events
+    or direct server-side Stripe API responses — never from frontend redirects."""
+
+    __tablename__ = "subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False, index=True)
+    stripe_subscription_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    stripe_customer_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    price_id: Mapped[str | None] = mapped_column(String(100))
+    cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    trial_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_during_trial: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    student: Mapped["Student"] = relationship("Student", back_populates="subscriptions")
+
+
+class StripeEvent(Base):
+    """Ledger of processed webhook events for idempotency (unique event id)."""
+
+    __tablename__ = "stripe_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agents.gemini_chat import GeminiChat
+from backend.access import require_student_access
 from backend.api.deps import get_current_student
 from backend.api.ratelimit import rate_limit
 from backend.config import RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW
@@ -90,7 +91,7 @@ def _flight_context_blurb(ctx: dict | None) -> str:
 
 
 @router.post("/preflight")
-async def preflight_v2(body: BriefingRequest, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
+async def preflight_v2(body: BriefingRequest, student: Student = Depends(require_student_access), _: None = Depends(_ai_limit)):
     """Structured briefing. HTTP 200 always carries a full result object —
     sections may be failed/unavailable (explicit), but the body is never null."""
     logger.info("Preflight v2 request from student %s: %s -> %s",
@@ -114,7 +115,7 @@ async def preflight_v2(body: BriefingRequest, student: Student = Depends(get_cur
 
 
 @router.post("/preflight/stream")
-async def preflight_stream(body: BriefingRequest, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
+async def preflight_stream(body: BriefingRequest, student: Student = Depends(require_student_access), _: None = Depends(_ai_limit)):
     """SSE stream of progressive section events. Emits generation_started,
     section_started/completed/unavailable/failed, generation_completed/failed.
     Every frame carries generation_id so the client can ignore stale streams."""
@@ -147,7 +148,7 @@ def preflight_cancel(body: CancelBody, student: Student = Depends(get_current_st
 
 
 @router.post("/preflight/follow-up")
-async def preflight_follow_up(body: FollowUpBody, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
+async def preflight_follow_up(body: FollowUpBody, student: Student = Depends(require_student_access), _: None = Depends(_ai_limit)):
     """Conversational follow-up about a previous briefing. The client re-sends
     the compact flight context it already holds (form state), so answers stay
     tied to the student's actual flight plan without server-side session state."""
@@ -173,7 +174,7 @@ requiring pilot verification."""
 
 
 @router.post("/preflight/suggest-route")
-def suggest_route(body: dict, student: Student = Depends(get_current_student), _: None = Depends(_ai_limit)):
+def suggest_route(body: dict, student: Student = Depends(require_student_access), _: None = Depends(_ai_limit)):
     departure = body.get("departure", "")
     destination = body.get("destination") or None
     aircraft_type = body.get("aircraft_type", "Cessna 172")

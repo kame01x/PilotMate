@@ -31,6 +31,18 @@ def run_migration():
                         f"ALTER TABLE {table} ADD COLUMN account_status VARCHAR(20) NOT NULL DEFAULT 'active'"
                     )
                     print(f"Added account_status to {table}")
+            cursor.execute("PRAGMA table_info(students)")
+            student_columns = [row[1] for row in cursor.fetchall()]
+            if "is_beta_tester" not in student_columns:
+                cursor.execute(
+                    "ALTER TABLE students ADD COLUMN is_beta_tester BOOLEAN NOT NULL DEFAULT 0"
+                )
+                print("Added is_beta_tester to students")
+            if "stripe_customer_id" not in student_columns:
+                cursor.execute(
+                    "ALTER TABLE students ADD COLUMN stripe_customer_id VARCHAR(100)"
+                )
+                print("Added stripe_customer_id to students")
             conn.commit()
         finally:
             conn.close()
@@ -47,6 +59,17 @@ def run_migration():
                         f"ALTER TABLE {table} ADD COLUMN account_status VARCHAR(20) NOT NULL DEFAULT 'active'"
                     ))
                     print(f"Added account_status to {table}")
+            for column, ddl in (
+                ("is_beta_tester", "ALTER TABLE students ADD COLUMN is_beta_tester BOOLEAN NOT NULL DEFAULT FALSE"),
+                ("stripe_customer_id", "ALTER TABLE students ADD COLUMN stripe_customer_id VARCHAR(100)"),
+            ):
+                result = conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    f"WHERE table_name = 'students' AND column_name = '{column}'"
+                ))
+                if result.fetchone() is None:
+                    conn.execute(text(ddl))
+                    print(f"Added {column} to students")
             conn.commit()
 
     print("Migration complete.")

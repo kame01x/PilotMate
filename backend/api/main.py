@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from backend.api.admin import router as admin_router
 from backend.api.aircraft import router as aircraft_router
 from backend.api.auth import router as auth_router
+from backend.api.billing import router as billing_router, webhook_router
 from backend.api.instructor import router as instructor_router
 from backend.api.preflight_api import router as preflight_router
 from backend.api.reference import router as reference_router
@@ -49,6 +50,8 @@ app.include_router(preflight_router)
 app.include_router(student_router)
 app.include_router(instructor_router)
 app.include_router(reference_router)
+app.include_router(billing_router)
+app.include_router(webhook_router)
 
 
 @app.exception_handler(Exception)

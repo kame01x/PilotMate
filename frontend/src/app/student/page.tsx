@@ -8,6 +8,7 @@ import StudentDashboard from "@/components/student/StudentDashboard";
 import Preflight from "@/components/student/Preflight";
 import Technical from "@/components/student/Technical";
 import Debrief from "@/components/student/Debrief";
+import Billing from "@/components/student/Billing";
 
 export default function StudentPage() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function StudentPage() {
         <div className="mx-auto w-full max-w-3xl">
           <div className={view === "dashboard" ? "" : "hidden"}><StudentDashboard /></div>
           <div className={view === "preflight" ? "" : "hidden"}><Preflight /></div>
+          <div className={view === "billing" ? "" : "hidden"}><Billing /></div>
         </div>
       </div>
       <div data-pattern={view === "technical" ? "low" : undefined} className={view === "technical" || view === "debrief" ? "flex min-h-0 min-w-0 flex-1 flex-col" : "hidden"}>
