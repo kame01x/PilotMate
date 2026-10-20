@@ -1,18 +1,12 @@
 import type { NextConfig } from "next";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+// /api-proxy/* is forwarded to BACKEND_URL at request time by src/proxy.ts.
+// Do not add a rewrites() entry for it: rewrites are baked at build time and
+// would freeze a wrong backend URL into the build.
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
-  async rewrites() {
-    return [
-      {
-        source: "/api-proxy/:path*",
-        destination: `${BACKEND_URL}/:path*`,
-      },
-    ];
-  },
   turbopack: {
     rules: {
       "*.css": {
