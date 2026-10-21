@@ -102,6 +102,48 @@ async function main() {
     async () => await testPaths(401)
   );
 
+  allPassed &= await runTest(
+    "Vercel production -> 200 with no auth header (gate must be off)",
+    {
+      VERCEL: "1",
+      VERCEL_ENV: "production",
+      STAGING_AUTH_USER: "testuser",
+      STAGING_AUTH_PASS: "testpass",
+    },
+    async () => await testPaths(200)
+  );
+
+  allPassed &= await runTest(
+    "Vercel preview -> 401 with no auth header (gate must be on)",
+    {
+      VERCEL: "1",
+      VERCEL_ENV: "preview",
+      STAGING_AUTH_USER: "testuser",
+      STAGING_AUTH_PASS: "testpass",
+    },
+    async () => await testPaths(401)
+  );
+
+  allPassed &= await runTest(
+    "Vercel preview -> 200 with valid auth header",
+    {
+      VERCEL: "1",
+      VERCEL_ENV: "preview",
+      STAGING_AUTH_USER: "testuser",
+      STAGING_AUTH_PASS: "testpass",
+    },
+    async () => {
+      const auth = "Basic " + Buffer.from("testuser:testpass").toString("base64");
+      return await testPaths(200, { headers: { Authorization: auth } });
+    }
+  );
+
+  allPassed &= await runTest(
+    "Vercel production, missing creds env -> 200 (gate off, not 503)",
+    { VERCEL: "1", VERCEL_ENV: "production", STAGING_AUTH_USER: "", STAGING_AUTH_PASS: "" },
+    async () => await testPaths(200)
+  );
+
   stub.close();
   process.exit(allPassed ? 0 : 1);
 }

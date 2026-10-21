@@ -5,6 +5,7 @@ import {
   LOCAL_BACKEND_URL,
   buildBackendTarget,
   isBasicAuthAuthorized,
+  isDeployedHost,
   isStagingHost,
   resolveBackendBase,
 } from "./proxy-utils.ts";
@@ -12,18 +13,52 @@ import {
 const basic = (creds) => `Basic ${Buffer.from(creds).toString("base64")}`;
 
 describe("isStagingHost", () => {
-  it("is true on Render", () => {
+  it("is true on Render staging", () => {
     assert.equal(isStagingHost({ RENDER: "true" }), true);
   });
-  it("is true on Vercel", () => {
-    assert.equal(isStagingHost({ VERCEL: "1" }), true);
+  it("is true on Vercel preview deployments", () => {
+    assert.equal(isStagingHost({ VERCEL: "1", VERCEL_ENV: "preview" }), true);
   });
-  it("is true when both are set", () => {
-    assert.equal(isStagingHost({ RENDER: "true", VERCEL: "1" }), true);
+  it("is false on Vercel production deployments", () => {
+    assert.equal(
+      isStagingHost({ VERCEL: "1", VERCEL_ENV: "production" }),
+      false,
+    );
+  });
+  it("is false on Vercel development (vercel dev)", () => {
+    assert.equal(
+      isStagingHost({ VERCEL: "1", VERCEL_ENV: "development" }),
+      false,
+    );
   });
   it("is false locally", () => {
     assert.equal(isStagingHost({}), false);
     assert.equal(isStagingHost({ RENDER: "false" }), false);
+  });
+});
+
+describe("isDeployedHost", () => {
+  it("is true on Render", () => {
+    assert.equal(isDeployedHost({ RENDER: "true" }), true);
+  });
+  it("is true on Vercel production", () => {
+    assert.equal(
+      isDeployedHost({ VERCEL: "1", VERCEL_ENV: "production" }),
+      true,
+    );
+  });
+  it("is true on Vercel preview", () => {
+    assert.equal(isDeployedHost({ VERCEL: "1", VERCEL_ENV: "preview" }), true);
+  });
+  it("is false on vercel dev (local loopback fallback allowed)", () => {
+    assert.equal(
+      isDeployedHost({ VERCEL: "1", VERCEL_ENV: "development" }),
+      false,
+    );
+  });
+  it("is false locally", () => {
+    assert.equal(isDeployedHost({}), false);
+    assert.equal(isDeployedHost({ RENDER: "false" }), false);
   });
 });
 
@@ -55,7 +90,7 @@ describe("isBasicAuthAuthorized", () => {
 });
 
 describe("resolveBackendBase", () => {
-  it("fails closed on staging when missing", () => {
+  it("fails closed in deployed environments when missing", () => {
     assert.equal(resolveBackendBase(undefined, true), null);
     assert.equal(resolveBackendBase("", true), null);
     assert.equal(resolveBackendBase("   ", true), null);
@@ -82,11 +117,11 @@ describe("resolveBackendBase", () => {
 });
 
 describe("buildBackendTarget", () => {
-  const staging = { staging: true, backendUrl: "https://backend.example.com" };
+  const deployed = { deployed: true, backendUrl: "https://backend.example.com" };
 
   it("strips the /api-proxy prefix and preserves the path", () => {
     const target = buildBackendTarget({
-      ...staging,
+      ...deployed,
       pathname: `${API_PROXY_PREFIX}/auth/student/login`,
       search: "",
     });
@@ -94,7 +129,7 @@ describe("buildBackendTarget", () => {
   });
   it("preserves the query string", () => {
     const target = buildBackendTarget({
-      ...staging,
+      ...deployed,
       pathname: `${API_PROXY_PREFIX}/admin/users`,
       search: "?page=2&limit=10",
     });
@@ -106,7 +141,7 @@ describe("buildBackendTarget", () => {
   });
   it("preserves percent-encoded path segments", () => {
     const target = buildBackendTarget({
-      ...staging,
+      ...deployed,
       pathname: `${API_PROXY_PREFIX}/flight%20log`,
       search: "",
     });
@@ -114,17 +149,17 @@ describe("buildBackendTarget", () => {
   });
   it("maps the bare prefix and trailing slash to the backend root", () => {
     assert.equal(
-      buildBackendTarget({ ...staging, pathname: API_PROXY_PREFIX, search: "" })?.href,
+      buildBackendTarget({ ...deployed, pathname: API_PROXY_PREFIX, search: "" })?.href,
       "https://backend.example.com/",
     );
     assert.equal(
-      buildBackendTarget({ ...staging, pathname: `${API_PROXY_PREFIX}/`, search: "" })?.href,
+      buildBackendTarget({ ...deployed, pathname: `${API_PROXY_PREFIX}/`, search: "" })?.href,
       "https://backend.example.com/",
     );
   });
   it("cannot be turned into an open proxy via protocol-relative paths", () => {
     const target = buildBackendTarget({
-      ...staging,
+      ...deployed,
       pathname: `${API_PROXY_PREFIX}//evil.com/steal`,
       search: "",
     });
@@ -133,20 +168,20 @@ describe("buildBackendTarget", () => {
   });
   it("keeps traversal attempts on the backend origin", () => {
     const target = buildBackendTarget({
-      ...staging,
+      ...deployed,
       pathname: `${API_PROXY_PREFIX}/../../etc/passwd`,
       search: "",
     });
     assert.equal(target?.origin, "https://backend.example.com");
     assert.equal(target?.pathname, "/etc/passwd");
   });
-  it("fails closed on staging when BACKEND_URL is missing", () => {
+  it("fails closed in deployed environments when BACKEND_URL is missing", () => {
     assert.equal(
       buildBackendTarget({
         backendUrl: undefined,
         pathname: `${API_PROXY_PREFIX}/health`,
         search: "",
-        staging: true,
+        deployed: true,
       }),
       null,
     );
@@ -156,7 +191,7 @@ describe("buildBackendTarget", () => {
       backendUrl: undefined,
       pathname: `${API_PROXY_PREFIX}/health`,
       search: "",
-      staging: false,
+      deployed: false,
     });
     assert.equal(target?.href, "http://127.0.0.1:8000/health");
   });
@@ -166,7 +201,24 @@ describe("buildBackendTarget", () => {
         backendUrl: "not a url",
         pathname: `${API_PROXY_PREFIX}/health`,
         search: "",
-        staging: false,
+        deployed: false,
+      }),
+      null,
+    );
+  });
+  it("fails closed on Vercel production when BACKEND_URL is missing", () => {
+    // Vercel Production is not "staging", but the proxy must still fail closed
+    // rather than proxying to a loopback address that cannot exist there.
+    assert.equal(
+      isDeployedHost({ VERCEL: "1", VERCEL_ENV: "production" }),
+      true,
+    );
+    assert.equal(
+      buildBackendTarget({
+        backendUrl: undefined,
+        pathname: `${API_PROXY_PREFIX}/health`,
+        search: "",
+        deployed: isDeployedHost({ VERCEL: "1", VERCEL_ENV: "production" }),
       }),
       null,
     );

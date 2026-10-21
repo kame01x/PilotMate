@@ -99,14 +99,14 @@ Enter the admin email, name, and password when prompted.
 
 ### 6. Restrict Staging Access
 
-Staging is protected by an HTTP Basic Auth gate in `frontend/src/proxy.ts`. Set these environment variables on the frontend Render service:
+Staging is protected by an HTTP Basic Auth gate in `frontend/src/proxy.ts`. Set these environment variables on the frontend Render service (and on Vercel **Preview** deployments):
 
 | Variable | Description |
 |---|---|
 | `STAGING_AUTH_USER` | Basic Auth username |
 | `STAGING_AUTH_PASS` | Basic Auth password (use a strong secret) |
 
-If either variable is missing on Render (`RENDER=true`), the frontend responds 503 rather than exposing the site. Local development is unaffected — the gate only activates when credentials are set.
+The gate activates only in staging-like environments: Render services (`RENDER=true`) and Vercel **preview** deployments (`VERCEL_ENV=preview`). Vercel **production** (`VERCEL_ENV=production`) and local development are never gated. If either variable is missing in a gated environment, the frontend responds 503 rather than exposing the site.
 
 Additional options:
 

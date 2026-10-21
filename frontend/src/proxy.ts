@@ -5,6 +5,7 @@ import {
   STAGING_BASIC_AUTH_REALM,
   buildBackendTarget,
   isBasicAuthAuthorized,
+  isDeployedHost,
   isStagingHost,
 } from "@/lib/proxy-utils";
 
@@ -13,23 +14,22 @@ export function proxy(request: NextRequest) {
   const user = process.env.STAGING_AUTH_USER;
   const pass = process.env.STAGING_AUTH_PASS;
 
-  if (!user || !pass) {
-    if (staging) {
+  if (staging) {
+    if (!user || !pass) {
       return new NextResponse("Staging authentication is not configured.", {
         status: 503,
       });
     }
-    return NextResponse.next();
-  }
 
-  const auth = request.headers.get("authorization");
-  if (!isBasicAuthAuthorized(auth, user, pass)) {
-    return new NextResponse("Authentication required", {
-      status: 401,
-      headers: {
-        "WWW-Authenticate": STAGING_BASIC_AUTH_REALM,
-      },
-    });
+    const auth = request.headers.get("authorization");
+    if (!isBasicAuthAuthorized(auth, user, pass)) {
+      return new NextResponse("Authentication required", {
+        status: 401,
+        headers: {
+          "WWW-Authenticate": STAGING_BASIC_AUTH_REALM,
+        },
+      });
+    }
   }
 
   const { pathname } = request.nextUrl;
@@ -41,7 +41,7 @@ export function proxy(request: NextRequest) {
       backendUrl: process.env.BACKEND_URL,
       pathname,
       search: request.nextUrl.search,
-      staging,
+      deployed: isDeployedHost(process.env),
     });
     if (!target) {
       return new NextResponse("API proxy is not configured.", {

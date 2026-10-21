@@ -5,8 +5,26 @@ export const STAGING_BASIC_AUTH_REALM =
 
 type Env = Record<string, string | undefined>;
 
+// True when the site should sit behind the staging Basic Auth gate.
+// Vercel sets VERCEL="1" on every deployment, including Production, so the
+// Vercel check must also look at VERCEL_ENV: only "preview" is gated.
+// Render only hosts staging services (see render.yaml), so RENDER="true" is
+// always gated. Vercel Production ("production") stays public.
 export function isStagingHost(env: Env): boolean {
-  return env.RENDER === "true" || env.VERCEL === "1";
+  if (env.RENDER === "true") return true;
+  if (env.VERCEL !== "1") return false;
+  return env.VERCEL_ENV === "preview";
+}
+
+// True in any deployed environment (Render, or Vercel outside `vercel dev`).
+// There the API proxy must fail closed when BACKEND_URL is missing or invalid
+// rather than silently falling back to a loopback backend that cannot exist.
+// `vercel dev` (VERCEL_ENV="development") is local development, so it keeps
+// the loopback fallback.
+export function isDeployedHost(env: Env): boolean {
+  if (env.RENDER === "true") return true;
+  if (env.VERCEL !== "1") return false;
+  return env.VERCEL_ENV !== "development";
 }
 
 export function isBasicAuthAuthorized(
@@ -41,10 +59,10 @@ function parseHttpUrl(value: string): URL | null {
 
 export function resolveBackendBase(
   raw: string | undefined,
-  staging: boolean,
+  deployed: boolean,
 ): URL | null {
   const value = (raw ?? "").trim();
-  if (!value) return staging ? null : parseHttpUrl(LOCAL_BACKEND_URL);
+  if (!value) return deployed ? null : parseHttpUrl(LOCAL_BACKEND_URL);
   return parseHttpUrl(value);
 }
 
@@ -52,9 +70,9 @@ export function buildBackendTarget(params: {
   backendUrl: string | undefined;
   pathname: string;
   search: string;
-  staging: boolean;
+  deployed: boolean;
 }): URL | null {
-  const base = resolveBackendBase(params.backendUrl, params.staging);
+  const base = resolveBackendBase(params.backendUrl, params.deployed);
   if (!base) return null;
 
   const rest = params.pathname.startsWith(API_PROXY_PREFIX)
