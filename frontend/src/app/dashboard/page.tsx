@@ -3,27 +3,22 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getRole, getToken, setToken, setRole, apiFetch } from "@/lib/api";
+import { dashboardCards, requiresStudentSession, type ModuleCardProps } from "@/lib/dashboard-cards";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ThemeToggle from "@/components/ThemeToggle";
 import MusicPlayer from "@/components/music/MusicPlayer";
 import AnswerView from "@/components/answer/AnswerView";
 
-interface ModuleCardProps {
-  title: string;
-  description: string;
-  iconPath: string;
-  href: string;
-}
-
-function ModuleCard({ title, description, iconPath, href }: ModuleCardProps) {
+function ModuleCard({ title, description, iconPath, href, onOpen }: ModuleCardProps & { onOpen?: (href: string) => void }) {
   const router = useRouter();
+  const open = () => (onOpen ? onOpen(href) : router.push(href));
   return (
     <Card
       className="w-64 cursor-pointer transition-all hover:border-primary hover:shadow-lg"
-      onClick={() => router.push(href)}
+      onClick={open}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") router.push(href); }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") open(); }}
       aria-label={`Open ${title}`}
     >
       <CardHeader>
@@ -52,6 +47,7 @@ export default function Dashboard() {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const r = getRole();
@@ -63,6 +59,19 @@ export default function Dashboard() {
     setToken(null);
     setRole(null);
     router.push("/");
+  }
+
+  function openModule(href: string) {
+    if (requiresStudentSession(href, role)) {
+      setNotice(
+        role
+          ? `A student session is required to open the Student area. You're signed in as ${role} — sign in with a student account to open it.`
+          : "A student session is required to open the Student area. Sign in with a student account to open it.",
+      );
+      return;
+    }
+    setNotice(null);
+    router.push(href);
   }
 
   async function send(text: string) {
@@ -83,17 +92,7 @@ export default function Dashboard() {
     }
   }
 
-  const cards: ModuleCardProps[] = role === "student"
-    ? [
-        { title: "Student", description: "Manage your flight training and learning activities.", iconPath: "M22 10v6M2 10l10-5 10 5-10 5z M6 12v5c0 1.6 2.7 3 6 3s6-1.4 6-3v-5", href: "/student" },
-        { title: "Documentation", description: "Access aviation documents and reference materials.", iconPath: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z", href: "/documentation" },
-        { title: "Exams", description: "Prepare for aviation examinations and review your knowledge.", iconPath: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8", href: "/exams" },
-      ]
-    : [
-        { title: "Instructor", description: "Access your instructor workspace and training tools.", iconPath: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75", href: "/instructor" },
-        { title: "Exams", description: "Prepare for aviation examinations and review your knowledge.", iconPath: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8", href: "/exams" },
-        { title: "Documentation", description: "Access aviation documents and reference materials.", iconPath: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z", href: "/documentation" },
-      ];
+  const cards: ModuleCardProps[] = dashboardCards(role);
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-8 p-8">
@@ -109,9 +108,18 @@ export default function Dashboard() {
       <div className="flex flex-wrap justify-center gap-6">
         {role !== null &&
           cards.map((card) => (
-            <ModuleCard key={card.title} {...card} />
+            <ModuleCard key={card.title} {...card} onOpen={openModule} />
           ))}
       </div>
+
+      {notice && (
+        <div role="status" className="w-full max-w-2xl rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+          <div className="flex items-start justify-between gap-3">
+            <p>{notice}</p>
+            <button onClick={() => setNotice(null)} className="shrink-0 hover:text-foreground">Dismiss</button>
+          </div>
+        </div>
+      )}
 
       <div className="w-full max-w-2xl">
         <div className="mb-4 flex flex-col items-center gap-2">

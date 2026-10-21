@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test src/lib/proxy-utils.test.mjs"
+    "test": "node --test \"src/lib/*.test.mjs\""
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

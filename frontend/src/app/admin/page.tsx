@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch, getRole, getToken, setRole, setToken } from "@/lib/api";
+import { apiFetch, isAdminSession, setRole, setToken } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,6 +98,7 @@ export default function AdminPage() {
   const [invites, setInvites] = useState<InviteRow[] | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -107,7 +108,10 @@ export default function AdminPage() {
   const [lastInvite, setLastInvite] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!getToken() || getRole() !== "admin") router.push("/login?role=admin");
+    const ok = isAdminSession();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAuthorized(ok);
+    if (!ok) router.push("/login?role=admin");
   }, [router]);
 
   const loadAll = useCallback(async () => {
@@ -133,11 +137,13 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    // Mount-only data fetch; all setState calls happen after `await` (async),
-    // so there is no synchronous cascading render.
+    // Runs after the access check flips `authorized`; mount-only otherwise.
+    // All setState calls happen after `await` (async), so there is no
+    // synchronous cascading render.
+    if (!authorized) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadAll();
-  }, [loadAll]);
+  }, [authorized, loadAll]);
 
   function logout() {
     setToken(null);
@@ -219,12 +225,21 @@ export default function AdminPage() {
   const students = (users?.students ?? []).filter((s) => match(s.name, s.email, s.business_id));
   const instructors = (users?.instructors ?? []).filter((i) => match(i.name, i.email, i.business_id));
 
+  // Render a neutral placeholder until the access check resolves, so the
+  // admin header and contents never flash for non-admin visitors.
+  if (!authorized) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <p className="text-sm text-muted-foreground">Checking access…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col gap-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold sm:text-2xl">PilotMate Admin</h1>
-          <Badge variant="destructive">restricted</Badge>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>Dashboard</Button>

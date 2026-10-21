@@ -27,6 +27,25 @@ export function setRole(role: string | null) {
   else localStorage.removeItem("pilotmate_role");
 }
 
+// True only when a token is stored AND it was issued for the admin role.
+// Used to gate rendering of the admin shell before any admin data is fetched.
+export function isAdminSession(): boolean {
+  return Boolean(getToken()) && getRole() === "admin";
+}
+
+// What the /student route should do for a stored session. Entry is granted
+// only to a student session — everything else stays out:
+//   "login"   no session at all → redirect to the login form (unchanged),
+//   "message" signed in but not a student (e.g. an admin following a link)
+//             → refuse entry with an explanation, session left untouched,
+//   "allow"   student session → normal workspace.
+// Deny-by-default: an unknown role never resolves to "allow".
+export type StudentRouteAccess = "login" | "message" | "allow";
+export function studentRouteAccess(token: string | null, role: string | null): StudentRouteAccess {
+  if (!token || !role) return "login";
+  return role === "student" ? "allow" : "message";
+}
+
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
   const token = getToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -39,7 +58,12 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     const cause = e instanceof Error ? e.message : String(e);
     throw new Error(`Cannot reach the backend at ${API_URL}. Is it running? (${cause})`);
   }
-  if (res.status === 401) {
+  // A 401 from an auth endpoint (login/signup) means the credentials were
+  // rejected, NOT that a stored session expired. Treating it as a session
+  // expiry redirected back to /login, which hard-reloaded the login form and
+  // swallowed the backend's real error message. Let those fall through to the
+  // generic error handling below so the caller can display the reason.
+  if (res.status === 401 && !path.startsWith("/auth/")) {
     setToken(null);
     setRole(null);
     if (typeof window !== "undefined") window.location.href = "/login";
