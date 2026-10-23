@@ -7,15 +7,18 @@ entitlement**.
 
 ## How the trial works
 
-- New students are offered a free trial **at signup** (invite signup → trial
-  screen → Stripe Checkout collects the card; the card is **not charged
-  today**).
+- New students sign up publicly (no invite required) and are offered a free
+  trial from the student Billing page after logging in (Stripe Checkout
+  collects the card; the card is **not charged today**). The trial-start
+  endpoint (`/billing/checkout-at-signup`) is authorized by the student's
+  JWT — the server derives the student identity from the verified token, so
+  a caller can only start checkout for themselves.
 - The trial length comes from `STRIPE_TRIAL_DAYS` (default **7**), passed to
   Stripe as `subscription_data.trial_period_days`. Stripe charges
   automatically only when the trial ends.
-- The first billing date is displayed on the signup trial screen, the Billing
-  page, and the success page (server-side estimate = now + `STRIPE_TRIAL_DAYS`,
-  exact date comes from the webhook-verified `trial_end`).
+- The first billing date is displayed on the Billing page and the success
+  page (server-side estimate = now + `STRIPE_TRIAL_DAYS`, exact date comes
+  from the webhook-verified `trial_end`).
 - **Cancel during the trial → no charge.** The app's cancel button issues an
   immediate Stripe cancellation while `trialing`, and Stripe never invoices a
   canceled trial. (Configure the Billing Portal to "cancel immediately" as
@@ -130,7 +133,8 @@ themselves beta or admin — covered by `scripts/test_subscriptions.py`.
    (Works on PostgreSQL and SQLite ≥ 3.35; removes only the new objects.)
 
 The existing staging Basic Auth gate (`frontend/src/proxy.ts`), JWT auth, and
-invite flow are unchanged.
+optional admin-issued invite codes are unchanged. Public signup no longer
+requires an invite, and trial checkout is authorized by the student JWT.
 
 ## Access policy (server-side, `backend/access.py`)
 
@@ -161,8 +165,8 @@ uv run python scripts/test_mass_balance.py
 cd frontend; npm run build
 ```
 
-Manual test-mode verification (needs real test keys): sign up with an invite,
-complete Checkout with card `4242 4242 4242 4242`, confirm the success page
-shows price + first billing date, confirm `/admin/subscriptions` shows
-`trialing`, then cancel during trial and confirm **no charge** in the Stripe
-test dashboard.
+Manual test-mode verification (needs real test keys): sign up as a student,
+log in, start the trial from the Billing page, complete Checkout with card
+`4242 4242 4242 4242`, confirm the success page shows price + first billing
+date, confirm `/admin/subscriptions` shows `trialing`, then cancel during
+trial and confirm **no charge** in the Stripe test dashboard.

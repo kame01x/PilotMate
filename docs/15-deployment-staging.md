@@ -126,18 +126,17 @@ Run these checks against the staging URL:
 # Health check
 curl https://pilotmate-api-staging.onrender.com/health
 
-# Public signup blocked
+# Public signup (no invite required)
 curl -X POST https://pilotmate-api-staging.onrender.com/auth/student/signup \
   -H "Content-Type: application/json" \
   -d '{"name":"test","email":"test@example.com","password":"password123"}'
-# Should return 422 (missing invite_code)
+# Should return 201 with status "active"
 ```
 
-Then log in as admin and test:
-- Create an invite via `POST /admin/invites`
-- Sign up with the invite code
-- Approve the pending account
-- Verify login works
+Then verify:
+- Sign up as a Student and as an Instructor without an invite code
+- Log in immediately after signup (accounts are active by default)
+- Admin invite codes (if issued) are still validated and consumed on use
 - Test aircraft ownership, pre-flight, mass & balance, messaging
 
 ## Environment Summary

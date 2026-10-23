@@ -22,7 +22,7 @@ class SignupStudent(BaseModel):
     name: str
     email: EmailStr
     password: str = Field(min_length=8)
-    invite_code: str
+    invite_code: str | None = None
     school: str | None = None
     country: str | None = None
     authority: str | None = None
@@ -33,7 +33,7 @@ class SignupInstructor(BaseModel):
     name: str
     email: EmailStr
     password: str = Field(min_length=8)
-    invite_code: str
+    invite_code: str | None = None
     school: str | None = None
 
 
@@ -64,8 +64,14 @@ def _token(sub: str, role: str) -> str:
 
 
 def _next_business_id(session, model, field, prefix) -> str:
-    rows = session.query(model).all()
-    return f"{prefix}-{len(rows) + 1:04d}"
+    rows = session.query(getattr(model, field)).all()
+    max_n = 0
+    for (value,) in rows:
+        if value and value.startswith(f"{prefix}-"):
+            suffix = value.split("-", 1)[1]
+            if suffix.isdigit():
+                max_n = max(max_n, int(suffix))
+    return f"{prefix}-{max_n + 1:04d}"
 
 
 def _validate_invite(session, code: str, email: str, role: str) -> Invite:
@@ -94,27 +100,32 @@ async def student_signup(body: SignupStudent, _: None = Depends(_student_signup_
     try:
         if session.query(Student).filter_by(email=body.email).first():
             raise HTTPException(400, "Email already registered")
-        invite = _validate_invite(session, body.invite_code, body.email, "student")
+        invite = None
+        if body.invite_code:
+            invite = _validate_invite(session, body.invite_code, body.email, "student")
         sid = _next_business_id(session, Student, "student_id", "STU")
         student = Student(
             student_id=sid, name=body.name, email=body.email, school=body.school,
             country=body.country, authority=body.authority, home_airport=body.home_airport,
-            hashed_password=_hash(body.password), account_status="pending",
+            hashed_password=_hash(body.password), account_status="active",
         )
         session.add(student)
         session.commit()
         session.refresh(student)
-        invite.used_at = datetime.now(timezone.utc)
-        invite.used_by_user_id = student.id
-        session.commit()
+        metadata = {"email": body.email}
+        if invite is not None:
+            invite.used_at = datetime.now(timezone.utc)
+            invite.used_by_user_id = student.id
+            metadata["invite_code"] = invite.code[:8] + "..."
+            session.commit()
         log = AuditLog(
             actor_id=student.id, actor_role="student", action="signup",
             target_id=student.id, target_type="student",
-            metadata_json={"email": body.email, "invite_code": invite.code[:8] + "..."},
+            metadata_json=metadata,
         )
         session.add(log)
         session.commit()
-        return {"student_id": sid, "email": body.email, "status": "pending"}
+        return {"student_id": sid, "email": body.email, "status": "active"}
     finally:
         session.close()
 
@@ -125,26 +136,31 @@ async def instructor_signup(body: SignupInstructor, _: None = Depends(_instructo
     try:
         if session.query(Instructor).filter_by(email=body.email).first():
             raise HTTPException(400, "Email already registered")
-        invite = _validate_invite(session, body.invite_code, body.email, "instructor")
+        invite = None
+        if body.invite_code:
+            invite = _validate_invite(session, body.invite_code, body.email, "instructor")
         iid = _next_business_id(session, Instructor, "instructor_id", "INS")
         instructor = Instructor(
             instructor_id=iid, name=body.name, email=body.email, school=body.school,
-            hashed_password=_hash(body.password), account_status="pending",
+            hashed_password=_hash(body.password), account_status="active",
         )
         session.add(instructor)
         session.commit()
         session.refresh(instructor)
-        invite.used_at = datetime.now(timezone.utc)
-        invite.used_by_user_id = instructor.id
-        session.commit()
+        metadata = {"email": body.email}
+        if invite is not None:
+            invite.used_at = datetime.now(timezone.utc)
+            invite.used_by_user_id = instructor.id
+            metadata["invite_code"] = invite.code[:8] + "..."
+            session.commit()
         log = AuditLog(
             actor_id=instructor.id, actor_role="instructor", action="signup",
             target_id=instructor.id, target_type="instructor",
-            metadata_json={"email": body.email, "invite_code": invite.code[:8] + "..."},
+            metadata_json=metadata,
         )
         session.add(log)
         session.commit()
-        return {"instructor_id": iid, "email": body.email, "status": "pending"}
+        return {"instructor_id": iid, "email": body.email, "status": "active"}
     finally:
         session.close()
 

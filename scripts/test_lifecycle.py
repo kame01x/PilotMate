@@ -1,4 +1,5 @@
-"""Phase B lifecycle tests: invite-only signup, admin approval, status transitions, audit log."""
+"""Phase B lifecycle tests: public signup (invite optional), admin approval,
+status transitions, audit log."""
 import sys
 from pathlib import Path
 
@@ -71,59 +72,66 @@ def test_admin_login():
 def test_non_admin_cannot_access_admin_endpoints():
     _seed_admin()
     _cleanup()
-    invite_code = _create_invite(_admin_token(), "user1@example.com")
     r = client.post("/auth/student/signup", json={
-        "name": "User One", "email": "user1@example.com",
-        "password": "password123", "invite_code": invite_code,
+        "name": "User One", "email": "user1@example.com", "password": "password123",
     })
     assert r.status_code == 201
-    session = SessionLocal()
-    try:
-        student = session.query(Student).filter_by(email="user1@example.com").first()
-        student_id = student.id
-    finally:
-        session.close()
-    client.post("/admin/approve", json={"user_id": student_id, "user_type": "student"},
-                headers={"Authorization": f"Bearer {_admin_token()}"})
     r = client.post("/auth/student/login", json={"email": "user1@example.com", "password": "password123"})
-    assert r.status_code == 200, "Approved account should login"
+    assert r.status_code == 200, "Active account should login"
     token = r.json()["access_token"]
     r = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403, "Non-admin should be rejected from admin endpoints"
     print("PASS: non-admin cannot access admin endpoints")
 
 
-def test_invite_only_signup():
+def test_public_signup_and_optional_invite():
     _seed_admin()
     _cleanup()
     admin_token = _admin_token()
 
+    # No invite code -> public signup succeeds, account is active.
     r = client.post("/auth/student/signup", json={
         "name": "No Invite", "email": "noinvite@example.com", "password": "password123",
     })
-    assert r.status_code == 422, f"Signup without invite_code should fail: {r.status_code}"
+    assert r.status_code == 201, f"Public signup should succeed: {r.status_code} {r.text}"
+    assert r.json()["status"] == "active"
 
+    r = client.post("/auth/instructor/signup", json={
+        "name": "No Invite Ins", "email": "noinvite-ins@example.com", "password": "password123",
+    })
+    assert r.status_code == 201, f"Public instructor signup should succeed: {r.status_code} {r.text}"
+    assert r.json()["status"] == "active"
+
+    # Invalid invite code still rejected.
     r = client.post("/auth/student/signup", json={
         "name": "Bad Code", "email": "badcode@example.com",
         "password": "password123", "invite_code": "invalid-code-123",
     })
     assert r.status_code == 400, f"Signup with invalid code should fail: {r.status_code}"
 
+    # Valid invite code still works.
     invite_code = _create_invite(admin_token, "invited@example.com")
     r = client.post("/auth/student/signup", json={
         "name": "Invited", "email": "invited@example.com",
         "password": "password123", "invite_code": invite_code,
     })
     assert r.status_code == 201, f"Invite signup should succeed: {r.status_code} {r.text}"
-    assert r.json()["status"] == "pending"
+    assert r.json()["status"] == "active"
 
+    # Invite codes are still single-use.
     r = client.post("/auth/student/signup", json={
         "name": "Reuse", "email": "reuse@example.com",
         "password": "password123", "invite_code": invite_code,
     })
     assert r.status_code == 400, "Invite code should not be reusable"
 
-    print("PASS: invite-only signup enforced")
+    # Duplicate email rejected.
+    r = client.post("/auth/student/signup", json={
+        "name": "Dup", "email": "noinvite@example.com", "password": "password123",
+    })
+    assert r.status_code == 400, "Duplicate email should be rejected"
+
+    print("PASS: public signup works without invite; supplied invites still validated")
 
 
 def test_wrong_email_invite():
@@ -143,16 +151,16 @@ def test_approve_and_login():
     _seed_admin()
     _cleanup()
     admin_token = _admin_token()
-    invite_code = _create_invite(admin_token, "approve@example.com")
     r = client.post("/auth/student/signup", json={
-        "name": "Approve", "email": "approve@example.com",
-        "password": "password123", "invite_code": invite_code,
+        "name": "Approve", "email": "approve@example.com", "password": "password123",
     })
     assert r.status_code == 201
 
+    # Public signup is active immediately — login works right away.
     r = client.post("/auth/student/login", json={"email": "approve@example.com", "password": "password123"})
-    assert r.status_code == 403, "Pending account should not login"
+    assert r.status_code == 200, "Active account should login immediately after public signup"
 
+    # Admin can still suspend then re-approve a user.
     session = SessionLocal()
     try:
         student = session.query(Student).filter_by(email="approve@example.com").first()
@@ -160,23 +168,27 @@ def test_approve_and_login():
     finally:
         session.close()
 
+    r = client.post("/admin/status", json={"user_id": student_id, "user_type": "student", "status": "pending"},
+                    headers={"Authorization": f"Bearer {admin_token}"})
+    assert r.status_code == 200
+    r = client.post("/auth/student/login", json={"email": "approve@example.com", "password": "password123"})
+    assert r.status_code == 403, "Pending account should not login"
+
     r = client.post("/admin/approve", json={"user_id": student_id, "user_type": "student"},
                     headers={"Authorization": f"Bearer {admin_token}"})
     assert r.status_code == 200
 
     r = client.post("/auth/student/login", json={"email": "approve@example.com", "password": "password123"})
     assert r.status_code == 200, "Active account should login"
-    print("PASS: approve then login works")
+    print("PASS: public signup is active; admin suspend/approve still gates login")
 
 
 def test_suspend_revoke_expired():
     _seed_admin()
     _cleanup()
     admin_token = _admin_token()
-    invite_code = _create_invite(admin_token, "status@example.com")
     client.post("/auth/student/signup", json={
-        "name": "Status", "email": "status@example.com",
-        "password": "password123", "invite_code": invite_code,
+        "name": "Status", "email": "status@example.com", "password": "password123",
     })
     session = SessionLocal()
     try:
@@ -184,9 +196,6 @@ def test_suspend_revoke_expired():
         student_id = student.id
     finally:
         session.close()
-
-    client.post("/admin/approve", json={"user_id": student_id, "user_type": "student"},
-                headers={"Authorization": f"Bearer {admin_token}"})
 
     for status in ["suspended", "revoked", "expired", "active"]:
         r = client.post("/admin/status", json={"user_id": student_id, "user_type": "student", "status": status},
@@ -206,10 +215,8 @@ def test_extend_expired():
     _seed_admin()
     _cleanup()
     admin_token = _admin_token()
-    invite_code = _create_invite(admin_token, "extend@example.com")
     client.post("/auth/student/signup", json={
-        "name": "Extend", "email": "extend@example.com",
-        "password": "password123", "invite_code": invite_code,
+        "name": "Extend", "email": "extend@example.com", "password": "password123",
     })
     session = SessionLocal()
     try:
@@ -233,18 +240,16 @@ def test_audit_log():
     _cleanup()
     admin_token = _admin_token()
     invite_code = _create_invite(admin_token, "audit@example.com")
-    client.post("/auth/student/signup", json={
-        "name": "Audit", "email": "audit@example.com",
-        "password": "password123", "invite_code": invite_code,
+    r = client.post("/auth/student/signup", json={
+        "name": "Audit", "email": "audit@example.com", "password": "password123",
     })
+    assert r.status_code == 201
     session = SessionLocal()
     try:
         student = session.query(Student).filter_by(email="audit@example.com").first()
         student_id = student.id
     finally:
         session.close()
-    client.post("/admin/approve", json={"user_id": student_id, "user_type": "student"},
-                headers={"Authorization": f"Bearer {admin_token}"})
     client.post("/admin/status", json={"user_id": student_id, "user_type": "student", "status": "suspended"},
                 headers={"Authorization": f"Bearer {admin_token}"})
 
@@ -252,7 +257,7 @@ def test_audit_log():
     assert r.status_code == 200
     actions = [a["action"] for a in r.json()]
     assert "invite_created" in actions
-    assert "user_approved" in actions
+    assert "signup" in actions
     assert "user_suspended" in actions
     print("PASS: audit log records admin actions")
 
@@ -349,7 +354,7 @@ if __name__ == "__main__":
     _cleanup()
     test_admin_login()
     test_non_admin_cannot_access_admin_endpoints()
-    test_invite_only_signup()
+    test_public_signup_and_optional_invite()
     test_wrong_email_invite()
     test_approve_and_login()
     test_suspend_revoke_expired()

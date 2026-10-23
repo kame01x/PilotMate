@@ -60,21 +60,52 @@ def _login(email, password="password123"):
     return None
 
 
-def test_public_registration_blocked():
+def test_public_registration_allowed():
     r = client.post("/auth/student/signup", json={
-        "name": "Hacker", "email": "hacker@example.com", "password": "password123"
+        "name": "Public Stu", "email": "public-stu@example.com", "password": "password123"
     })
-    assert r.status_code == 422, f"Expected 422 (missing invite_code), got {r.status_code}"
+    assert r.status_code == 201, f"Expected 201 (public student signup), got {r.status_code} {r.text}"
+    assert r.json()["status"] == "active"
     r = client.post("/auth/instructor/signup", json={
-        "name": "Hacker", "email": "hacker2@example.com", "password": "password123"
+        "name": "Public Ins", "email": "public-ins@example.com", "password": "password123"
     })
-    assert r.status_code == 422, f"Expected 422 (missing invite_code), got {r.status_code}"
+    assert r.status_code == 201, f"Expected 201 (public instructor signup), got {r.status_code} {r.text}"
+    assert r.json()["status"] == "active"
+    print("PASS: public registration allowed without invite (201, active)")
+
+
+def test_invalid_invite_rejected():
     r = client.post("/auth/student/signup", json={
         "name": "Hacker", "email": "hacker@example.com", "password": "password123",
         "invite_code": "bogus-code-xyz"
     })
     assert r.status_code == 400, f"Expected 400 (invalid invite code), got {r.status_code}"
-    print("PASS: public registration blocked (422/400)")
+    print("PASS: invalid invite code rejected (400)")
+
+
+def test_duplicate_email_rejected():
+    r = client.post("/auth/student/signup", json={
+        "name": "Alice Again", "email": "alice@example.com", "password": "password123"
+    })
+    assert r.status_code == 400, f"Expected 400 (duplicate email), got {r.status_code}"
+    print("PASS: duplicate email rejected (400)")
+
+
+def test_admin_role_escalation_blocked():
+    r = client.post("/auth/student/signup", json={
+        "name": "Evil", "email": "evil-admin@example.com", "password": "password123",
+        "role": "admin", "account_status": "active", "is_admin": True,
+    })
+    assert r.status_code == 201, f"Signup should succeed, got {r.status_code} {r.text}"
+    # The submitted role field must be ignored — only the endpoint assigns roles.
+    ra = client.post("/auth/admin/login", json={"email": "evil-admin@example.com", "password": "password123"})
+    assert ra.status_code == 401, f"Admin login must fail for a self-registered user, got {ra.status_code}"
+    rs = client.post("/auth/student/login", json={"email": "evil-admin@example.com", "password": "password123"})
+    assert rs.status_code == 200, f"Student login should work, got {rs.status_code}"
+    token = rs.json()["access_token"]
+    r2 = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
+    assert r2.status_code == 403, f"Student token must be rejected from admin endpoints, got {r2.status_code}"
+    print("PASS: role=admin extra field ignored, no admin escalation")
 
 
 def test_inactive_account_cannot_login():
@@ -250,7 +281,10 @@ def test_stale_jwt_instructor_blocked():
 
 if __name__ == "__main__":
     _seed()
-    test_public_registration_blocked()
+    test_public_registration_allowed()
+    test_invalid_invite_rejected()
+    test_duplicate_email_rejected()
+    test_admin_role_escalation_blocked()
     test_inactive_account_cannot_login()
     test_active_account_can_login()
     test_invalid_credentials()

@@ -90,14 +90,9 @@ def _admin_token():
 
 
 def _make_student(email, name="Sub Student", approve=True, role="student"):
-    """Invite -> signup -> (approve) -> login. Returns (student_pk, token|None)."""
-    admin_token = _admin_token()
-    r = client.post("/admin/invites", json={"email": email, "role": role},
-                    headers={"Authorization": f"Bearer {admin_token}"})
-    assert r.status_code == 200, f"Invite failed: {r.status_code} {r.text}"
-    code = r.json()["invite_code"]
+    """Public signup -> login. Returns (student_pk, token|None)."""
     r = client.post(f"/auth/{role}/signup", json={
-        "name": name, "email": email, "password": "password123", "invite_code": code,
+        "name": name, "email": email, "password": "password123",
     })
     assert r.status_code == 201, f"Signup failed: {r.status_code} {r.text}"
     session = SessionLocal()
@@ -108,8 +103,6 @@ def _make_student(email, name="Sub Student", approve=True, role="student"):
     finally:
         session.close()
     if approve:
-        client.post("/admin/approve", json={"user_id": pk, "user_type": role},
-                    headers={"Authorization": f"Bearer {admin_token}"})
         r = client.post(f"/auth/{role}/login", json={"email": email, "password": "password123"})
         assert r.status_code == 200, f"Login failed: {r.status_code} {r.text}"
         return pk, r.json()["access_token"]
@@ -504,36 +497,31 @@ def test_checkout_at_signup_validation():
         _patch("STRIPE_PUBLISHABLE_KEY", "pk_test_dummy")
         _patch("STRIPE_PRICE_ID_MONTHLY", "price_test_monthly")
 
-        admin_token = _admin_token()
-        r = client.post("/admin/invites", json={"email": "trial@example.com", "role": "student"},
-                        headers={"Authorization": f"Bearer {admin_token}"})
-        code = r.json()["invite_code"]
-        r = client.post("/auth/student/signup", json={
-            "name": "Trial", "email": "trial@example.com",
-            "password": "password123", "invite_code": code,
-        })
-        assert r.status_code == 201
+        student_pk, student_token = _make_student("trial@example.com", name="Trial")
+        # A second student, whose id a hostile client might try to spoof.
+        _make_student("trial-other@example.com", name="TrialOther")
         session = SessionLocal()
         try:
-            _row = session.query(Student).filter_by(email="trial@example.com").first()
-            student_pk = _row.id
-            student_bid = _row.student_id
+            _row = session.query(Student).filter_by(email="trial-other@example.com").first()
+            other_bid = _row.student_id
         finally:
             session.close()
 
-        # Unknown student -> 404 (before any Stripe call).
-        r = client.post("/billing/checkout-at-signup",
-                        json={"student_id": "STU-9999", "invite_code": code, "price_key": "monthly"})
-        assert r.status_code == 404, r.text
+        # No token -> 401 (before any Stripe call).
+        r = client.post("/billing/checkout-at-signup", json={"price_key": "monthly"})
+        assert r.status_code == 401, r.text
 
-        # Invite that did not create this account -> 400.
-        r = client.post("/billing/checkout-at-signup",
-                        json={"student_id": student_bid, "invite_code": "some-other-invite-code",
-                              "price_key": "monthly"})
-        assert r.status_code == 400, r.text
+        # Instructor token -> 403 (student role required).
+        _, instructor_token = _make_student("trialins@example.com", name="TrialIns", role="instructor")
+        r = client.post("/billing/checkout-at-signup", json={"price_key": "monthly"},
+                        headers={"Authorization": f"Bearer {instructor_token}"})
+        assert r.status_code == 403, r.text
 
-        # Correct pairing passes validation (would hit Stripe next — network —
-        # so we stop here; full checkout is a documented manual test-mode step).
+        # Correct token passes validation (would hit Stripe next — network —
+        # so we stop with a fake; full checkout is a documented manual
+        # test-mode step). A spoofed student_id in the body is ignored —
+        # identity comes from the JWT, so a student cannot start checkout for
+        # another student.
         from backend.api import billing as billing_mod
         original = billing_mod._create_checkout_session
         called = {}
@@ -546,16 +534,40 @@ def test_checkout_at_signup_validation():
         billing_mod._create_checkout_session = fake_create
         try:
             r = client.post("/billing/checkout-at-signup",
-                            json={"student_id": student_bid, "invite_code": code, "price_key": "monthly"})
+                            json={"price_key": "monthly", "student_id": other_bid},
+                            headers={"Authorization": f"Bearer {student_token}"})
             assert r.status_code == 200 and r.json()["url"].startswith("https://checkout.stripe.com"), r.text
             assert r.json()["trial_days"] == config.STRIPE_TRIAL_DAYS
             assert r.json()["estimated_first_billing_date"]
             assert called["price_id"] == "price_test_monthly"
+            # Checkout was created for the token owner, not the spoofed student_id.
+            assert called["student"] != other_bid, "Checkout must use the JWT identity, not a client-supplied student_id"
         finally:
             billing_mod._create_checkout_session = original
+
+        # Already-subscribed student -> 400.
+        _set_subscription(student_pk, "active", period_end_in_days=30)
+        r = client.post("/billing/checkout-at-signup", json={"price_key": "monthly"},
+                        headers={"Authorization": f"Bearer {student_token}"})
+        assert r.status_code == 400, r.text
+
+        # Beta student -> 400.
+        session = SessionLocal()
+        try:
+            s = session.query(Student).filter_by(id=student_pk).first()
+            sub = session.query(Subscription).filter_by(student_id=student_pk).first()
+            if sub is not None:
+                session.delete(sub)
+            s.is_beta_tester = True
+            session.commit()
+        finally:
+            session.close()
+        r = client.post("/billing/checkout-at-signup", json={"price_key": "monthly"},
+                        headers={"Authorization": f"Bearer {student_token}"})
+        assert r.status_code == 400 and "beta" in r.json()["detail"].lower(), r.text
     finally:
         _restore_all()
-    print("PASS: signup checkout validated by invite pairing, testable offline")
+    print("PASS: signup checkout requires student JWT, ignores spoofed ids, enforces subscription/beta guards")
 
 
 def test_admin_stats_and_users_fields():

@@ -34,7 +34,7 @@ from backend.access import (
 from backend.api.deps import get_current_student
 from backend.api.ratelimit import RATE_LIMIT_AUTH_REQUESTS, RATE_LIMIT_AUTH_WINDOW, rate_limiter
 from backend.database import SessionLocal
-from backend.models import Invite, Student, StripeEvent, Subscription
+from backend.models import Student, StripeEvent, Subscription
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +65,6 @@ class CheckoutBody(BaseModel):
 
 
 class SignupCheckoutBody(BaseModel):
-    student_id: str = Field(min_length=3, max_length=20, pattern=r"^STU-[0-9]{1,10}$")
-    invite_code: str = Field(min_length=8, max_length=128)
     price_key: str = Field(default="monthly", pattern="^(monthly|yearly)$")
 
 
@@ -233,16 +231,17 @@ def start_checkout(body: CheckoutBody, student: Student = Depends(get_current_st
 
 
 @router.post("/checkout-at-signup")
-async def checkout_at_signup(body: SignupCheckoutBody):
-    """Checkout for a freshly signed-up (possibly still pending) student.
+async def checkout_at_signup(body: SignupCheckoutBody, student: Student = Depends(get_current_student)):
+    """Checkout for a freshly signed-up student.
 
-    Authorized by the consumed invite code that created the account — no
-    session token exists yet at this point in the signup flow. Rate limited
-    per student to prevent abuse.
+    Authorized by the authenticated student's JWT (`get_current_student`) —
+    the student identity is derived from the verified token, never from the
+    request body, so a caller can only start checkout for themselves. Rate
+    limited per student to prevent abuse.
     """
     _require_ready()
     allowed, retry_after = await rate_limiter.is_allowed(
-        f"billing-signup:{body.student_id}", 10, RATE_LIMIT_AUTH_WINDOW
+        f"billing-signup:{student.student_id}", 10, RATE_LIMIT_AUTH_WINDOW
     )
     if not allowed:
         raise HTTPException(
@@ -253,20 +252,6 @@ async def checkout_at_signup(body: SignupCheckoutBody):
     price_id = _allowed_price_id(body.price_key)
     session = SessionLocal()
     try:
-        student = session.query(Student).filter_by(student_id=body.student_id).first()
-        if student is None:
-            raise HTTPException(status_code=404, detail="Student not found")
-        invite = session.query(Invite).filter_by(code=body.invite_code).first()
-        if (
-            invite is None
-            or invite.revoked_at is not None
-            or invite.used_at is None
-            or invite.used_by_user_id != student.id
-            or (invite.email or "").lower() != (student.email or "").lower()
-        ):
-            raise HTTPException(status_code=400, detail="Invite code does not match this signup")
-        if student.account_status not in ("pending", "active"):
-            raise HTTPException(status_code=403, detail="Account cannot start a trial")
         if _has_valid_subscription(session, student.id):
             raise HTTPException(status_code=400, detail=ALREADY_SUBSCRIBED)
         if student.is_beta_tester:
@@ -276,7 +261,7 @@ async def checkout_at_signup(body: SignupCheckoutBody):
             )
         return _create_checkout_session(student, price_id, session)
     except stripe.StripeError as exc:
-        logger.error("Signup checkout failed for student %s: %s", body.student_id, exc)
+        logger.error("Signup checkout failed for student %s: %s", student.student_id, exc)
         raise HTTPException(status_code=402, detail=f"Stripe checkout failed: {exc}")
     finally:
         session.close()
