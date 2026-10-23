@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -33,21 +32,21 @@ export default function Shell({
 }) {
   const router = useRouter();
   return (
-    <div className="flex h-screen">
-      <aside className="flex w-64 flex-col gap-2 border-r border-sidebar-border bg-sidebar p-4">
+    <div className="flex h-screen flex-col sm:flex-row">
+      <aside className="flex w-full flex-col gap-2 overflow-y-auto border-b border-sidebar-border bg-sidebar p-4 sm:w-64 sm:flex-shrink-0 sm:border-b-0 sm:border-r">
         <div className="mb-2 flex items-center justify-between px-2">
           <h2 className="text-lg font-bold text-sidebar-foreground">PilotMate</h2>
           <ThemeToggle />
         </div>
         <MusicPlayer />
-        <nav className="flex flex-col gap-4">
+        <nav className="flex flex-row gap-2 overflow-x-auto sm:flex-col sm:gap-4 sm:overflow-x-visible">
           {items.map((item) => {
             const isActive = active === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => onSelect(item.id)}
-                className={`flex items-center gap-3 rounded-md px-4 py-3 text-left text-base transition-colors ${
+                className={`flex shrink-0 items-center gap-3 whitespace-nowrap rounded-md px-4 py-3 text-left text-base transition-colors ${
                   isActive
                     ? "border-l-4 border-secondary bg-secondary/10 text-secondary"
                     : "text-sidebar-foreground/80 hover:bg-accent hover:text-sidebar-foreground"
@@ -61,12 +60,12 @@ export default function Shell({
             );
           })}
         </nav>
-        <div className="mt-auto flex flex-col gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
+        <div className="mt-auto flex flex-row gap-2 pt-2 sm:flex-col">
+          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => router.push("/dashboard")}>
             <svg viewBox="0 0 24 24" className="mr-1 inline h-4 w-4 fill-none stroke-current" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             Main Dashboard
           </Button>
-          <Button variant="outline" size="sm" onClick={onLogout}>Log out</Button>
+          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={onLogout}>Log out</Button>
         </div>
       </aside>
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-8 pl-8 pr-4">

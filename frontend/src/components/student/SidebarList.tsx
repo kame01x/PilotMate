@@ -27,19 +27,19 @@ export default function SidebarList({
 }) {
   const router = useRouter();
   return (
-    <aside className="flex h-full w-64 flex-shrink-0 flex-col gap-3 overflow-y-auto border-r border-sidebar-border bg-card p-4">
+    <aside className="flex w-full flex-col gap-3 overflow-y-auto border-b border-sidebar-border bg-card p-4 sm:h-full sm:w-64 sm:flex-shrink-0 sm:border-b-0 sm:border-r">
       <div className="mb-2 flex items-center justify-between px-2">
         <h2 className="text-lg font-bold text-sidebar-foreground">{title}</h2>
           <ThemeToggle />
         </div>
         <MusicPlayer />
 
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-row gap-1 overflow-x-auto sm:flex-col sm:overflow-x-visible">
         {items.map((item) => (
           <button
             key={item.id}
             onClick={() => onSelect(item)}
-            className={`rounded-md px-3 py-2 text-left text-sm transition-colors ${
+            className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm transition-colors ${
               selectedId === item.id
                 ? "border-l-2 border-primary bg-primary/10 text-primary"
                 : "text-sidebar-foreground/80 hover:bg-accent hover:text-sidebar-foreground"

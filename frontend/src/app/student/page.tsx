@@ -50,14 +50,20 @@ export default function StudentPage() {
   if (role !== "student") {
     return (
       <main className="auth-backdrop flex min-h-screen items-center justify-center p-8">
-        <Card className="w-96">
+        <Card className="w-full max-w-sm">
           <CardHeader><CardTitle>Student session required</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-4">
             <p className="text-sm text-muted-foreground">
               A student session is required to open the Student area — it is the student learning workspace.
-              You&apos;re signed in as {role}.
+              You&apos;re signed in as {role}. Your current session stays on this device until you sign in with
+              a student account.
             </p>
-            <Button onClick={() => router.push(role === "admin" ? "/admin" : "/dashboard")}>Back to PilotMate</Button>
+            <div className="flex flex-col gap-2">
+              <Button onClick={() => router.push("/login?role=student")}>Sign in as student</Button>
+              <Button variant="outline" onClick={() => router.push(role === "admin" ? "/admin" : "/dashboard")}>
+                Back to PilotMate
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </main>

@@ -47,7 +47,7 @@ function LoginForm() {
   }
 
   return (
-    <Card className="w-96">
+    <Card className="w-full max-w-sm">
       <CardHeader><CardTitle>Log in — {ROLE_LABELS[role]}</CardTitle></CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-wrap gap-2">
@@ -61,6 +61,14 @@ function LoginForm() {
         <div><Label>Password</Label><Input value={password} onChange={(e) => setPassword(e.target.value)} type="password" /></div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button onClick={submit} disabled={loading}>{loading ? "Logging in…" : "Log in"}</Button>
+        <div className="flex items-center justify-between text-sm">
+          <button onClick={() => router.push(`/signup?role=${role}`)} className="text-primary hover:underline">
+            Create an account
+          </button>
+          <button onClick={() => router.push("/")} className="text-muted-foreground hover:text-foreground">
+            Back to main menu
+          </button>
+        </div>
       </CardContent>
     </Card>
   );

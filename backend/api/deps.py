@@ -62,6 +62,6 @@ def get_current_instructor(payload: dict = Depends(get_payload)) -> Instructor:
 def get_current_user(payload: dict = Depends(get_payload)):
     role = payload.get("role")
     if role not in ("student", "instructor"):
-        raise HTTPException(status_code=403, detail="Unknown role")
+        raise HTTPException(status_code=403, detail="Student or instructor access is required for this resource.")
     _get_model(payload, role)
     return {"role": role, "id": payload.get("sub")}

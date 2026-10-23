@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { getRole, getToken, setToken, setRole, apiFetch } from "@/lib/api";
 import { dashboardCards, requiresStudentSession, type ModuleCardProps } from "@/lib/dashboard-cards";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
 import MusicPlayer from "@/components/music/MusicPlayer";
 import AnswerView from "@/components/answer/AnswerView";
@@ -99,6 +100,10 @@ export default function Dashboard() {
       <div className="flex w-full items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">PilotMate</h1>
         <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => router.push("/")}>
+            <svg viewBox="0 0 24 24" className="mr-1 inline h-4 w-4 fill-none stroke-current" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10" /></svg>
+            Home
+          </Button>
           <button onClick={logout} className="text-sm text-muted-foreground hover:text-foreground">Log out</button>
           <ThemeToggle />
           <MusicPlayer />
@@ -117,6 +122,14 @@ export default function Dashboard() {
           <div className="flex items-start justify-between gap-3">
             <p>{notice}</p>
             <button onClick={() => setNotice(null)} className="shrink-0 hover:text-foreground">Dismiss</button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => router.push(role === "admin" ? "/admin" : "/dashboard")}>
+              Go to {role === "admin" ? "admin dashboard" : "dashboard"}
+            </Button>
+            <Button size="sm" onClick={() => router.push("/login?role=student")}>
+              Sign in as student
+            </Button>
           </div>
         </div>
       )}

@@ -165,7 +165,7 @@ function SignupForm() {
   }
 
   return (
-    <Card className="w-96">
+    <Card className="w-full max-w-sm">
       <CardHeader><CardTitle>Sign up — {role === "student" ? "Student" : "Instructor"}</CardTitle></CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex gap-2">
@@ -175,10 +175,22 @@ function SignupForm() {
         <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
         <div><Label>Password (min 8 chars)</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-        <div><Label>Invite code (required)</Label><Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="Paste the code you received" /></div>
+        <div>
+          <Label>Invite code (required)</Label>
+          <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="Paste the code you received" />
+          <p className="mt-1 text-xs text-muted-foreground">Invite codes are issued by an administrator.</p>
+        </div>
         <div><Label>School (optional)</Label><Input value={school} onChange={(e) => setSchool(e.target.value)} /></div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button onClick={submit} disabled={loading || !inviteCode.trim()}>{loading ? "Creating account…" : "Sign up"}</Button>
+        <div className="flex items-center justify-between text-sm">
+          <button onClick={() => router.push(`/login?role=${role}`)} className="text-primary hover:underline">
+            Already have an account? Log in
+          </button>
+          <button onClick={() => router.push("/")} className="text-muted-foreground hover:text-foreground">
+            Main menu
+          </button>
+        </div>
       </CardContent>
     </Card>
   );
