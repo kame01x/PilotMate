@@ -1,4 +1,4 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
@@ -6,7 +6,7 @@
 
 /*
   Dark mode is the default deliberately: a dark surface with bright accent
-  colors reads better under canopy glare AND at night — same reason aircraft
+  colors reads better under canopy glare AND at night â€” same reason aircraft
   instrument displays use exactly this scheme. The light theme is opt-in.
 */
 :root {
@@ -122,7 +122,7 @@
   }
 }
 
-/* Phase 18 — aeronautical chart texture. Kept extremely faint so it never
+/* Phase 18 â€” aeronautical chart texture. Kept extremely faint so it never
    competes with text; long-text screens drop to a bare minimum. */
 .chart-pattern {
   color: var(--primary);
@@ -163,7 +163,7 @@ body:has([data-pattern="low"]) .chart-pattern {
   }
 }
 
-/* Decorative aviation backdrop for auth/landing only — never behind body text */
+/* Decorative aviation backdrop for auth/landing only â€” never behind body text */
 .auth-backdrop {
   background-image:
     radial-gradient(ellipse at top, #38BDF81f 0%, transparent 60%),
@@ -180,3 +180,52 @@ body:has([data-pattern="low"]) .chart-pattern {
     repeating-linear-gradient(90deg, #2563EB0a 0 1px, transparent 1px 40px);
   background-color: #E8EDF5;
 }
+
+/* Login-only cockpit photograph; keep landing page backgrounds unchanged */
+.cockpit-backdrop {
+  background-color: #0b1724;
+  background-image: linear-gradient(90deg, rgba(5, 16, 30, 0.08), rgba(5, 16, 30, 0.12)), url('/cockpit-login.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+
+/* Restored original PilotMate login card and input styling */
+.auth-glass {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(7px) saturate(125%);
+  -webkit-backdrop-filter: blur(7px) saturate(125%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 24px 60px rgba(10, 30, 55, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.auth-field {
+  height: clamp(44px, 9.7cqw, 54px);
+  border-radius: 9999px;
+  border: 1px solid rgba(226, 236, 245, 0.9);
+  background: #f7f9fc;
+  padding-left: clamp(44px, 12.5cqw, 68px);
+  padding-right: clamp(44px, 12.5cqw, 68px);
+  color: #07315a;
+  font-size: clamp(14px, 3.8cqw, 20px);
+}
+
+.auth-field::placeholder {
+  color: #92abc8;
+}
+
+.auth-field:focus-visible {
+  border-color: #2585CF;
+  box-shadow: 0 0 0 3px rgba(37, 133, 207, 0.22);
+  outline: none;
+}
+
+@media (max-width: 767px) {
+  .auth-glass {
+    background: rgba(255, 255, 255, 0.96);
+  }
+}
+
