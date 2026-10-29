@@ -14,17 +14,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import json
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agents.gemini_chat import GeminiChat
+from agents.preflight_agent import create_flight, save_preflight_package
 from backend.access import require_student_access
 from backend.api.deps import get_current_student
 from backend.api.ratelimit import rate_limit
 from backend.config import RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW
-from backend.models import Student
+from backend.models import Flight, Student
+from backend.database import SessionLocal
 from backend.preflight.contracts import BriefingRequest
 from backend.preflight.orchestrator import (
     build_result_text,
@@ -39,6 +42,10 @@ router = APIRouter(prefix="/student", tags=["student"])
 
 _ai_limit = rate_limit(RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW)
 
+# Successful explicit saves, keyed by briefing generation id (idempotency for
+# repeat clicks / retries of the same save — never create a duplicate Flight).
+_SAVED_FLIGHTS_BY_GENERATION: dict[str, int] = {}
+
 
 class CancelBody(BaseModel):
     generation_id: str
@@ -48,6 +55,13 @@ class FollowUpBody(BaseModel):
     message: str
     generation_id: str | None = None
     flight_context: dict | None = None
+
+
+class PreflightSaveBody(BaseModel):
+    """Explicit save request: a generated briefing the student chose to save."""
+
+    generation_id: str
+    briefing: BriefingRequest
 
 
 _FOLLOWUP_SYSTEM = """You are PilotMate's pre-flight assistant answering a student's
@@ -90,6 +104,78 @@ def _flight_context_blurb(ctx: dict | None) -> str:
     return "\n".join(parts)
 
 
+def _persist_student_flight(student: Student, body: BriefingRequest) -> Flight:
+    """Persist an explicitly saved pre-flight briefing as a durable Flight (+ PreflightPackage)
+    owned by the authenticated student.
+
+    Saving is a deliberate student action (POST /student/preflight/save). Generation itself
+    never persists; the flight plan (and the deterministic mass & balance / plan context) is
+    stored here so the saved flight is retrievable via GET /student/flights for the Dashboard
+    and the Debriefing flight selector.
+    """
+    details = {
+        "departure_airport": body.departure,
+        "destination_airport": body.destination,
+        "route": body.route,
+        "aircraft_type": body.aircraft_type,
+        "exercise_type": body.exercise,
+        "runway_surface": body.departure_runway_surface,
+        "controlled": body.departure_controlled,
+        "flight_rules": body.rules,
+    }
+    flight_date: datetime | None = None
+    if body.flight_date:
+        try:
+            flight_date = datetime.fromisoformat(body.flight_date)
+        except ValueError:
+            flight_date = None
+    flight = create_flight(student.student_id, details, date=flight_date)
+    package = {
+        "mass_and_balance": body.mass_balance,
+        "flight_plan": {
+            "route": body.route,
+            "flight_rules": body.rules,
+            "exercises": [e for e in (body.exercise or "").split(",") if e.strip()],
+            "aircraft_type": body.aircraft_type,
+            "aircraft_registration": body.aircraft_registration,
+            "departure": body.departure,
+            "destination": body.destination,
+            "departure_time": body.departure_time,
+            "flight_period": body.flight_period,
+            "authority": body.authority,
+            "runway": body.runway,
+            "fuel": body.fuel,
+            "endurance": body.endurance,
+            "departure_runway_surface": body.departure_runway_surface,
+            "departure_controlled": body.departure_controlled,
+            "destination_runway_surface": body.destination_runway_surface,
+            "destination_controlled": body.destination_controlled,
+        },
+        "metar_taf": None,
+        "notam_summary": None,
+        "active_areas": None,
+        "charts_links": None,
+        "frequencies": None,
+        "document_checklist": None,
+    }
+    save_preflight_package(flight.id, package)
+    return flight
+
+
+def _flight_to_dict(flight: Flight) -> dict:
+    return {
+        "id": flight.id,
+        "flight_id": flight.flight_id,
+        "date": flight.date.isoformat() if flight.date else None,
+        "departure_airport": flight.departure_airport,
+        "destination_airport": flight.destination_airport,
+        "route": flight.route,
+        "aircraft_type": flight.aircraft_type,
+        "exercise_type": flight.exercise_type,
+        "flight_rules": flight.flight_rules,
+    }
+
+
 @router.post("/preflight")
 async def preflight_v2(body: BriefingRequest, student: Student = Depends(require_student_access), _: None = Depends(_ai_limit)):
     """Structured briefing. HTTP 200 always carries a full result object —
@@ -104,6 +190,8 @@ async def preflight_v2(body: BriefingRequest, student: Student = Depends(require
     text = build_result_text(result)
     logger.info("Preflight v2 %s status=%s sections=%s chars=%d",
                 result.generation_id, result.status.value, result.summary(), len(text))
+    # Generation never persists a flight — saving is an explicit student action via
+    # POST /student/preflight/save. The generation response therefore carries no flight.
     return {
         "response": text,
         "notice": result.notice,
@@ -114,16 +202,52 @@ async def preflight_v2(body: BriefingRequest, student: Student = Depends(require
     }
 
 
+@router.post("/preflight/save")
+def preflight_save(body: PreflightSaveBody, student: Student = Depends(require_student_access), _: None = Depends(_ai_limit)) -> dict:
+    """Explicitly save a generated pre-flight briefing as a durable Flight (+ PreflightPackage).
+
+    Generation itself never persists. Saving is a deliberate student action: the server
+    persists the flight plan and the deterministic mass & balance context for the
+    authenticated student and returns the real saved flight. Idempotent per generation_id,
+    so repeated clicks / retries of the same save never create duplicate Flight rows.
+    """
+    gen_id = body.generation_id
+    existing_id = _SAVED_FLIGHTS_BY_GENERATION.get(gen_id)
+    if existing_id is not None:
+        session = SessionLocal()
+        try:
+            flight = session.query(Flight).filter_by(id=existing_id).first()
+        finally:
+            session.close()
+        if flight is not None:
+            return {"saved": True, "generation_id": gen_id, "flight": _flight_to_dict(flight)}
+        _SAVED_FLIGHTS_BY_GENERATION.pop(gen_id, None)
+    try:
+        flight = _persist_student_flight(student, body.briefing)
+    except Exception as exc:  # noqa: BLE001 — never report success when nothing was persisted
+        logger.error("Preflight save persistence failed for %s: %s", student.student_id, exc, exc_info=True)
+        raise HTTPException(status_code=502, detail="Failed to save the pre-flight flight")
+    _SAVED_FLIGHTS_BY_GENERATION[gen_id] = flight.id
+    return {"saved": True, "generation_id": gen_id, "flight": _flight_to_dict(flight)}
+
+
 @router.post("/preflight/stream")
 async def preflight_stream(body: BriefingRequest, student: Student = Depends(require_student_access), _: None = Depends(_ai_limit)):
     """SSE stream of progressive section events. Emits generation_started,
     section_started/completed/unavailable/failed, generation_completed/failed.
     Every frame carries generation_id so the client can ignore stale streams."""
 
+    final_event: dict = {}
+
     async def event_source():
+        nonlocal final_event
         try:
             async for frame in stream_briefing(body.model_dump()):
                 yield frame
+                if frame.startswith("event: generation_completed"):
+                    final_event = json.loads(frame.split("data: ", 1)[1].strip())
+            # Stream finished: generation never persists a flight; saving is an explicit
+            # student action via POST /student/preflight/save.
         except Exception as exc:  # noqa: BLE001 — last-resort SSE error frame
             logger.error("Preflight stream crashed for %s: %s", student.student_id, exc, exc_info=True)
             payload = {"type": "generation_failed", "generation_id": "unknown",

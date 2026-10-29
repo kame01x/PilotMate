@@ -66,13 +66,27 @@ def linked_students(instructor: Instructor = Depends(get_current_instructor)):
         session.close()
 
 
+@router.get("/students/{student_id}")
+def student_lookup(student_id: str, instructor: Instructor = Depends(get_current_instructor)) -> dict:
+    """Instructor-only lookup by business Student ID for the linking flow: resolve the
+    student (and their display name) before the instructor confirms the link.
+    Only minimal identity fields are returned - no personal/flight data."""
+    student = _student_by_business_id(student_id)
+    return {
+        "found": True,
+        "student_id": student.student_id,
+        "name": student.name,
+    }
+
+
 @router.post("/link-student")
-def link(body: LinkBody, instructor: Instructor = Depends(get_current_instructor)):
+def link(body: LinkBody, instructor: Instructor = Depends(get_current_instructor)) -> dict:
     student = _student_by_business_id(body.student_id)
     try:
         return link_student(instructor_id=_instructor_pk(instructor), student_id=student.id)
-    except (ValueError,) as exc:
-        raise HTTPException(404, str(exc))
+    except ValueError as exc:
+        # 404: unknown student/instructor; 409: student already linked to another instructor.
+        raise HTTPException(status_code=409 if "already linked" in str(exc) else 404, detail=str(exc))
 
 
 @router.post("/messages")

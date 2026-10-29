@@ -207,6 +207,9 @@ export default function Preflight() {
   const [notice, setNotice] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [showFollowUp, setShowFollowUp] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedFlight, setSavedFlight] = useState<{ id: number; flight_id: string } | null>(null);
 
   // Mass & balance: the section registers a calc function here so submit can
   // run a fresh deterministic calculation at submit time (never stale).
@@ -217,6 +220,7 @@ export default function Preflight() {
   }, []);
 
   const generationIdRef = useRef<string | null>(null);
+  const lastPayloadRef = useRef<Record<string, unknown> | null>(null);
   const streamAbortRef = useRef<(() => void) | null>(null);
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamTokenRef = useRef<object>({});
@@ -248,6 +252,9 @@ export default function Preflight() {
     setNotice(null);
     setStreamError(null);
     setShowFollowUp(false);
+    setSaveState("idle");
+    setSaveError(null);
+    setSavedFlight(null);
     generationIdRef.current = null;
     clearStallTimer();
   }
@@ -351,6 +358,7 @@ export default function Preflight() {
       destination_controlled: destination ? destControlled === "controlled" : undefined,
       mass_balance: freshMb ?? undefined,
     };
+    lastPayloadRef.current = payload;
     const stream = streamPreflight(payload, {
       onEvent: (event) => {
         if (streamTokenRef.current !== token) return; // stale stream — ignore
@@ -368,6 +376,30 @@ export default function Preflight() {
       setStreamError("The briefing stalled (no update for 90 seconds). Please retry.");
       stream.abort();
     }, 90000);
+  }
+
+  async function handleSave() {
+    if (saveState === "saving") return;
+    const payload = lastPayloadRef.current;
+    if (!payload) {
+      setSaveError("No briefing context available to save yet.");
+      setSaveState("error");
+      return;
+    }
+    setSaveState("saving");
+    setSaveError(null);
+    try {
+      const data = await apiFetch("/student/preflight/save", {
+        method: "POST",
+        body: JSON.stringify({ generation_id: generationIdRef.current, briefing: payload }),
+      });
+      const flight = data?.flight;
+      setSavedFlight({ id: flight?.id, flight_id: flight?.flight_id });
+      setSaveState("saved");
+    } catch (e) {
+      setSaveState("error");
+      setSaveError(e instanceof Error ? e.message : "Failed to save the pre-flight.");
+    }
   }
 
   async function cancel() {
@@ -846,6 +878,19 @@ export default function Preflight() {
           </div>
         }
       />
+      {/* Explicit save: generation is not persisted — saving is a deliberate action. */}
+      <div className="flex items-center gap-3">
+        <Button
+          variant={saveState === "saved" ? "outline" : "default"}
+          size="sm"
+          onClick={saveState === "saved" ? undefined : handleSave}
+          disabled={saveState === "saving" || briefingStatus !== "complete" || saveState === "saved"}
+        >
+          {saveState === "saving" ? "Saving…" : saveState === "saved" ? `Saved ✓ — ${savedFlight?.flight_id ?? ""}` : "Save pre-flight"}
+        </Button>
+        {saveState === "error" && <p className="text-sm text-destructive">{saveError}</p>}
+      </div>
+
       <div>
         <Button variant="outline" size="sm" onClick={() => { setStarted(false); resetBriefingState(); }}>
           Edit details

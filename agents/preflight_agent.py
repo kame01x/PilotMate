@@ -359,7 +359,7 @@ class PreflightAgent:
         return {"routes": [{"name": "Suggested route", "description": response, "waypoints": []}]}
 
 
-def create_flight(student_id: str, details: dict) -> Flight:
+def create_flight(student_id: str, details: dict, date: datetime | None = None) -> Flight:
     session = SessionLocal()
     try:
         student = session.query(Student).filter_by(student_id=student_id).first()
@@ -369,7 +369,7 @@ def create_flight(student_id: str, details: dict) -> Flight:
         flight = Flight(
             flight_id=f"FLT-{count:04d}",
             student_id=student.id,
-            date=datetime.now(timezone.utc),
+            date=date or datetime.now(timezone.utc),
             departure_airport=details["departure_airport"],
             destination_airport=details.get("destination_airport"),
             route=details.get("route"),

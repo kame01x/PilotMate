@@ -14,7 +14,7 @@ from backend.api.ratelimit import rate_limit
 from backend.api.sessions import get_debrief_agent, get_preflight_agent, get_router_agent, get_technical_agent
 from backend.config import RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW
 from backend.database import SessionLocal
-from backend.models import Debrief, Flight, Student
+from backend.models import Debrief, Flight, Instructor, Student
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +130,27 @@ def instructor_thread(student: Student = Depends(get_current_student)):
         return {"conversation": get_conversation(student.id, student.linked_instructor_id)}
     except PermissionError as exc:
         raise HTTPException(403, str(exc))
+
+
+@router.get("/me")
+def me(student: Student = Depends(require_student_access)) -> dict:
+    """Public identity of the authenticated student: their unique Student ID and,
+    when an instructor relationship exists, the instructor they are authorized to
+    train with. Returns only safe public fields - never passwords or tokens."""
+    instructor: dict | None = None
+    if student.linked_instructor_id is not None:
+        session = SessionLocal()
+        try:
+            row = session.query(Instructor).filter_by(id=student.linked_instructor_id).first()
+            if row is not None:
+                instructor = {"instructor_id": row.instructor_id, "name": row.name}
+        finally:
+            session.close()
+    return {
+        "student_id": student.student_id,
+        "name": student.name,
+        "linked_instructor": instructor,
+    }
 
 
 @router.get("/aviation-data")

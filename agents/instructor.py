@@ -39,6 +39,19 @@ def link_student(instructor_id: int, student_id: int) -> dict:
             raise ValueError(f"Instructor {instructor_id} not found")
         if student is None:
             raise ValueError(f"Student {student_id} not found")
+        if student.linked_instructor_id is not None and student.linked_instructor_id != instructor.id:
+            other = session.query(Instructor).filter_by(id=student.linked_instructor_id).first()
+            other_id = other.instructor_id if other is not None else str(student.linked_instructor_id)
+            raise ValueError(f"Student {student.student_id} is already linked to instructor {other_id}")
+        if student.linked_instructor_id == instructor.id:
+            # Idempotent: the same instructor re-linking the same student is a no-op success.
+            return {
+                "linked": True,
+                "instructor": instructor.instructor_id,
+                "student": student.student_id,
+                "linked_students_now": [s.student_id for s in instructor.linked_students],
+                "already_linked": True,
+            }
         student.linked_instructor_id = instructor.id
         session.commit()
         return {

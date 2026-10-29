@@ -171,6 +171,7 @@ class StreamEvent(BaseModel):
         "generation_failed",
     ]
     generation_id: str
+    flight_id: int | None = None
     section_id: str | None = None
     section: BriefingSection | None = None
     status: BriefingStatus | None = None

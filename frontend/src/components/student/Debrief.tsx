@@ -10,11 +10,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Debrief() {
   const [flights, setFlights] = useState<any[]>([]);
+  const [flightError, setFlightError] = useState<string | null>(null);
+  const [loadingFlights, setLoadingFlights] = useState(true);
   const [flightId, setFlightId] = useState<string>("");
   const [saved, setSaved] = useState<any | null>(null);
 
   useEffect(() => {
-    apiFetch("/student/flights").then(setFlights).catch(() => setFlights([]));
+    let cancelled = false;
+    apiFetch("/student/flights")
+      .then((data) => {
+        if (cancelled) return;
+        setFlights(data);
+        setLoadingFlights(false);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setFlightError(e.message);
+        setLoadingFlights(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function send(message: string): Promise<ChatTurn> {
@@ -48,16 +64,24 @@ export default function Debrief() {
     <div className="flex min-h-0 flex-1 flex-col items-center gap-4 pt-8 pb-8">
       <div className="w-full max-w-2xl">
         <Label>Flight to debrief</Label>
-        <Select value={flightId} onValueChange={(v) => setFlightId(v ?? "")}>
-          <SelectTrigger><SelectValue placeholder="Select a past flight" /></SelectTrigger>
-          <SelectContent>
-            {flights.map((f) => (
-              <SelectItem key={f.id} value={String(f.id)}>
-                {f.flight_id} — {f.exercise_type} — {f.date?.slice(0, 10)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {loadingFlights ? (
+          <p className="text-sm text-muted-foreground">Loading flights…</p>
+        ) : flightError ? (
+          <p className="text-sm text-destructive">{flightError}</p>
+        ) : flights.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No saved flights yet. Create a pre-flight first.</p>
+        ) : (
+          <Select value={flightId} onValueChange={(v) => setFlightId(v ?? "")}>
+            <SelectTrigger><SelectValue placeholder="Select a past flight" /></SelectTrigger>
+            <SelectContent>
+              {flights.map((f) => (
+                <SelectItem key={f.id} value={String(f.id)}>
+                  {f.flight_id} — {f.exercise_type} — {f.date?.slice(0, 10)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {saved && (
