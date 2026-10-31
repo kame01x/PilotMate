@@ -1,99 +1,102 @@
 # PilotMate
 
-Training assistant app for student pilots and flight instructors.
+**PilotMate is an aviation training assistant for student pilots and flight instructors.**
 
-## Phase 1 — Setup
+It brings together aviation training workflows in one application, helping student pilots prepare for flights, review their performance, and develop their technical knowledge while supporting instructor–student collaboration.
 
-### Prerequisites
+## Main Features
 
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) package manager
+- **Student workspace:** Dashboard and access to aviation training activities.
+- **Pre-flight preparation:** Flight preparation workflows and aviation information.
+- **Flight debriefing:** Review completed flights and reflect on performance.
+- **Technical training:** Explore aviation topics and ask questions.
+- **Instructor workspace:** Tools supporting instructor and student collaboration.
+- **AI-assisted capabilities:** Integrated assistance for selected training workflows.
 
-### Install dependencies
+PilotMate is a training and educational application. It is not a substitute for approved flight planning, official aviation publications, instructor supervision, or operational decision-making.
+
+## Technology
+
+- **Frontend:** Next.js 16, React 19, TypeScript and Tailwind CSS.
+- **Backend:** Python 3.12+, FastAPI and Uvicorn.
+- **Database:** SQLAlchemy with SQLite or PostgreSQL.
+- **Integrations:** Gemini, aviation information services and Stripe.
+
+## Run Locally
+
+### Requirements
+
+- Python 3.12 or newer
+- [uv](https://docs.astral.sh/uv/)
+- Node.js 20.9 or newer
+- npm
+
+### Backend
+
+From the project root:
 
 ```bash
 uv sync
 ```
 
-### Initialize the database
+Create a root `.env` file and configure the API keys needed for the integrations you use:
+
+```env
+DATABASE_URL=sqlite:///./pilotmate.db
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.8-flash
+TAVILY_API_KEY=
+AVIOWIKI_API_KEY=
+```
+
+Initialize the database:
 
 ```bash
 uv run python scripts/init_db.py
 ```
 
-This creates all tables in the configured database (SQLite by default).
-
-### Seed the database
+Start the backend:
 
 ```bash
-uv run python scripts/seed_db.py
+uv run uvicorn backend.api.main:app --reload
 ```
 
-Inserts one test student (`STU-0001`) and one test instructor (`INS-0001`).
+API documentation: http://127.0.0.1:8000/docs
 
-## Configuration
+### Frontend
 
-All configuration is read from `.env` at the project root:
-
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `sqlite:///./pilotmate.db` | SQLAlchemy database URL. Change to a Postgres connection string to switch databases. |
-| `GEMINI_API_KEY` | — | Gemini API key for the agent chat. Without it, tools still run directly. |
-| `GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model name. Switch freely (e.g. `gemini-3.5-flash`, `gemini-3.7-flash`) if a model's quota is exhausted. |
-| `TAVILY_API_KEY` | — | Enables NOTAM/active-area web search tool. Without it, the tool returns a notice. |
-| `AVIOWIKI_API_KEY` | — | Optional token for Aviowiki airport lookups (unauthenticated calls work, rate-limited). |
-
-### HTTP API (Phase 8)
+Open a second terminal:
 
 ```bash
-uv run uvicorn backend.api.main:app --reload   # http://127.0.0.1:8000/docs
+cd frontend
+npm ci
+npm run dev
 ```
 
-All agent routes require a JWT from `/auth/student/login` or `/auth/instructor/login` (signup first). Test without a server: `uv run python scripts/test_api.py`.
+Open http://localhost:3000.
 
-### Phase 5 test — Instructor (Part 2 v1)
-
-```bash
-uv run python scripts/test_instructor.py
-```
-
-Links a student to an instructor, sends/reads InstructorMessage rows, confirms an unlinked instructor is rejected, and runs the reused Pre-flight Agent for the linked student.
-
-### Pre-flight Agent test
-
-```bash
-uv run python scripts/test_preflight.py
-```
-
-Simulates a full pre-flight conversation (weather, airport info, NOTAMs, mass & balance, checklist) and saves a Flight + PreflightPackage.
-
-### Switching to Postgres
-
-1. Install the Postgres driver: `uv add psycopg2-binary`
-2. Update `.env`:
-   ```
-   DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/pilotmate
-   ```
-3. Re-run `init_db.py` — no code changes needed.
+Configure the frontend backend connection using the appropriate environment variables for your local or deployed environment. Never publish credentials or private deployment settings.
 
 ## Project Structure
 
-```
-PilotMate/
-├── agents/                  # Agent code (later phases)
-├── backend/
-│   ├── config.py            # Env loading, DATABASE_URL
-│   ├── database.py          # Engine + session factory
-│   └── models.py            # SQLAlchemy models
-├── docs/                    # Planning documents
-├── scripts/
-│   ├── init_db.py           # Create all tables
-│   └── seed_db.py           # Insert test data
-├── .env                     # Local config (not in git)
-├── pyproject.toml           # uv project definition
-└── README.md
-```
+- `agents/` — AI-assisted training agents
+- `backend/` — FastAPI application and backend services
+- `docs/` — Project documentation
+- `frontend/` — Next.js application
+- `scripts/` — Development and maintenance scripts
+- `pyproject.toml` — Python project configuration
 
-## Data Model
+## Testing
 
-See [docs/01-architecture.md](docs/01-architecture.md) for the full architecture and data model specification.
+- Backend: run the FastAPI application and check `/health`.
+- Frontend development: `npm run dev`
+- Production build: `npm run build`
+- Frontend tests: `npm test`
+
+## Author and Development
+
+**Created and independently developed by Sofiane Nahi.**
+
+The project concept, aviation requirements, product direction, development decisions, integration and testing were led by the creator.
+
+Development involved open-source technologies and AI-assisted coding tools. No other human developers contributed to the project.
