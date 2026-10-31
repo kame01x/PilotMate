@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(html:not(.light), html:not(.light) *));
 
 /*
   Dark mode is the default deliberately: a dark surface with bright accent
@@ -138,6 +138,95 @@ body:has([data-pattern="low"]) .chart-pattern {
   opacity: 0.07;
 }
 
+/* Authenticated application workspace only. A soft wash keeps the chart
+   artwork present without letting its blue airway lines compete with content.
+   Landing, login and sign-up keep their own untouched backdrops. */
+.student-workspace-bg {
+  background-color: #eaf3ff;
+  background-image:
+    linear-gradient(rgba(234, 243, 255, 0.46), rgba(234, 243, 255, 0.58)),
+    url("/background11.png");
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.student-workspace-bg.student-dashboard-view {
+  background-image:
+    linear-gradient(rgba(234, 243, 255, 0.4), rgba(234, 243, 255, 0.5)),
+    url("/background11.png");
+}
+body:has(.student-workspace-bg) .chart-pattern {
+  display: none;
+}
+
+.student-dashboard-surface {
+  --background: #e6f0fc;
+  --foreground: #0f2a5c;
+  --card: #ffffff;
+  --card-foreground: #0f2a5c;
+  --popover: #ffffff;
+  --popover-foreground: #0f2a5c;
+  --primary: #1f6bf5;
+  --primary-foreground: #ffffff;
+  --secondary: #1f6bf5;
+  --secondary-foreground: #ffffff;
+  --muted: #eaf2ff;
+  --muted-foreground: #526a94;
+  --accent: #eaf2ff;
+  --accent-foreground: #0f2a5c;
+  --border: #d6e3f6;
+  --input: #d6e3f6;
+  --ring: #1f6bf5;
+  color: #0f2a5c;
+}
+
+html:not(.light) .student-dashboard-surface {
+  --background: #0b1526;
+  --foreground: #e8eef8;
+  --card: #101726;
+  --card-foreground: #e8eef8;
+  --popover: #101726;
+  --popover-foreground: #e8eef8;
+  --primary: #38bdf8;
+  --primary-foreground: #081226;
+  --secondary: #8b5cf6;
+  --secondary-foreground: #f5f7fa;
+  --muted: #101726;
+  --muted-foreground: #9db1cc;
+  --accent: #14213a;
+  --accent-foreground: #e8eef8;
+  --destructive: #f87171;
+  --border: #22304a;
+  --input: #22304a;
+  --ring: #38bdf8;
+  color: #e8eef8;
+}
+
+html:not(.light) .student-workspace-bg {
+  background-color: #0b1526;
+  background-image:
+    linear-gradient(rgba(11, 21, 38, 0.46), rgba(11, 21, 38, 0.58)),
+    url("/background11.png");
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+html:not(.light) .student-workspace-bg.student-dashboard-view {
+  background-image:
+    linear-gradient(rgba(11, 21, 38, 0.4), rgba(11, 21, 38, 0.5)),
+    url("/background11.png");
+}
+
+.pm-dashboard-snapshot {
+  background: linear-gradient(180deg, #f7faff 0%, #e3eeff 100%);
+}
+
+html:not(.light) .pm-dashboard-snapshot {
+  background: linear-gradient(180deg, #101726 0%, #0b1526 100%);
+}
+
 @media print {
   body {
     background: white !important;
@@ -181,7 +270,134 @@ body:has([data-pattern="low"]) .chart-pattern {
   background-color: #E8EDF5;
 }
 
+/* Sign-up page backdrop: the supplied sign-up photograph, full bleed behind the single left card */
+.sign-up-backdrop {
+  min-height: 100dvh;
+  background-color: #0b1724;
+  background-image: url("/sign-up-page.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Sign-up only: compact vertical rhythm and capped control sizes. Keeping the
+   controls at their 1366px size prevents the card growing on larger desktops,
+   while the clamps preserve touch-sized controls and normal page scrolling on
+   mobile. */
+.sign-up-backdrop .auth-glass {
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+.sign-up-backdrop .auth-glass > a:first-child {
+  margin-bottom: 12px !important;
+}
+
+.sign-up-backdrop .auth-glass > a:first-child svg {
+  height: clamp(24px, 6.9cqw, 34px) !important;
+}
+
+.sign-up-backdrop .auth-glass > a:first-child span {
+  font-size: clamp(15px, 5.4cqw, 22px) !important;
+}
+
+.sign-up-backdrop .auth-glass > h1 {
+  font-size: clamp(20px, 6.6cqw, 30px) !important;
+}
+
+.sign-up-backdrop .auth-glass [role="tablist"] {
+  margin-top: 12px !important;
+  padding-top: clamp(3px, 0.9cqw, 4px) !important;
+  padding-bottom: clamp(3px, 0.9cqw, 4px) !important;
+}
+
+.sign-up-backdrop .auth-glass [role="tablist"] button {
+  padding-top: clamp(5px, 1.7cqw, 6.5px) !important;
+  padding-bottom: clamp(5px, 1.7cqw, 6.5px) !important;
+  font-size: clamp(13px, 3.9cqw, 18px) !important;
+}
+
+.sign-up-backdrop .auth-glass > form {
+  margin-top: 12px !important;
+  gap: clamp(8px, 2.4cqw, 9px) !important;
+}
+
+.sign-up-backdrop .auth-glass .auth-field {
+  height: 44px !important;
+  font-size: clamp(14px, 3.8cqw, 17px) !important;
+}
+
+.sign-up-backdrop .auth-glass > form > button[type="submit"] {
+  margin-top: 8px !important;
+  height: 46px !important;
+}
+
+.sign-up-backdrop .auth-glass > div[aria-hidden="true"] {
+  margin-top: 12px !important;
+  margin-bottom: 12px !important;
+}
+
 /* Login-only cockpit photograph; keep landing page backgrounds unchanged */
+.cockpit-backdrop .auth-glass {
+  min-height: clamp(586px, calc(560px + 6.25cqw), 595px);
+}
+
+.cockpit-backdrop .auth-glass {
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+.cockpit-backdrop .auth-glass > a:first-child {
+  margin-bottom: 12px !important;
+}
+
+.cockpit-backdrop .auth-glass > a:first-child svg {
+  height: clamp(24px, 6.9cqw, 34px) !important;
+}
+
+.cockpit-backdrop .auth-glass > a:first-child span {
+  font-size: clamp(15px, 5.4cqw, 22px) !important;
+}
+
+.cockpit-backdrop .auth-glass > h1 {
+  font-size: clamp(20px, 6.6cqw, 30px) !important;
+}
+
+.cockpit-backdrop .auth-glass [role="tablist"] {
+  margin-top: 12px !important;
+  padding-top: clamp(3px, 0.9cqw, 4px) !important;
+  padding-bottom: clamp(3px, 0.9cqw, 4px) !important;
+}
+
+.cockpit-backdrop .auth-glass [role="tablist"] button {
+  padding-top: clamp(5px, 1.7cqw, 6.5px) !important;
+  padding-bottom: clamp(5px, 1.7cqw, 6.5px) !important;
+  font-size: clamp(13px, 3.9cqw, 18px) !important;
+}
+
+.cockpit-backdrop .auth-glass > form {
+  margin-top: 12px !important;
+  gap: clamp(8px, 2.4cqw, 9px) !important;
+}
+
+.cockpit-backdrop .auth-glass .auth-field {
+  height: 44px !important;
+  font-size: clamp(14px, 3.8cqw, 17px) !important;
+}
+
+.cockpit-backdrop .auth-glass > form > button[type="submit"] {
+  margin-top: 8px !important;
+  height: 46px !important;
+}
+
+.cockpit-backdrop .auth-glass > div[aria-hidden="true"] {
+  margin-top: 12px !important;
+  margin-bottom: 12px !important;
+}
+
+.cockpit-backdrop {
+  background-color: #0b1724;
+}
 .cockpit-backdrop {
   background-color: #0b1724;
   background-image: linear-gradient(90deg, rgba(5, 16, 30, 0.08), rgba(5, 16, 30, 0.12)), url('/cockpit-login.png');

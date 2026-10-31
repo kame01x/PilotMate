@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import ChatPanel, { ChatTurn } from "@/components/ChatPanel";
 import BriefingReport from "@/components/preflight/BriefingReport";
 import MassBalanceSection from "@/components/preflight/MassBalanceSection";
+import PreflightAviation, { type NearestAirportData } from "@/components/student/PreflightAviation";
 import { apiFetch } from "@/lib/api";
 import { mbSummary, type MBResult } from "@/lib/massBalance";
 import {
@@ -174,9 +175,13 @@ const EXERCISE_CATEGORIES: { name: string; items: string[] }[] = [
 ];
 
 export default function Preflight() {
+  const [activeSection, setActiveSection] = useState<"briefing" | "aviation">("briefing");
   const [started, setStarted] = useState(false);
   const [departure, setDeparture] = useState("");
   const [destination, setDestination] = useState("");
+  const [nearestAirport, setNearestAirport] = useState<NearestAirportData | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [route, setRoute] = useState("");
   const [routeMode, setRouteMode] = useState("");
   const [aircraftType, setAircraftType] = useState("Cessna 172");
@@ -227,6 +232,52 @@ export default function Preflight() {
 
   const canSuggest = departure.trim() && destination.trim() && aircraftType.trim();
   const canSubmit = departure.trim() && depRunwaySurface && depControlled && flightPeriod && (!destination.trim() || (destRunwaySurface && destControlled));
+
+  function selectAirport(code: string) {
+    setDeparture(code);
+    setNearestAirport((current) => (current?.icao === code ? current : null));
+  }
+
+  function setDepartureManually(value: string) {
+    setDeparture(value.toUpperCase());
+    setNearestAirport(null);
+  }
+
+  function useMyLocation() {
+    setLocationError(null);
+    if (!navigator.geolocation) {
+      setLocationError("Location is not available in this browser. Enter an ICAO code manually.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const data = await apiFetch(`/student/preflight/nearest-airport?lat=${latitude}&lon=${longitude}`);
+          if (!data.ok || !data.data?.icao) {
+            setLocationError(data.error || "No nearby airport was found. Enter an ICAO code manually.");
+            return;
+          }
+          setNearestAirport(data.data);
+          setDeparture(data.data.icao);
+        } catch (error) {
+          setLocationError(error instanceof Error ? error.message : "Nearest-airport lookup failed.");
+        } finally {
+          setLocating(false);
+        }
+      },
+      (error) => {
+        setLocating(false);
+        setLocationError(
+          error.code === error.PERMISSION_DENIED
+            ? "Location permission was denied. Enter an ICAO code manually."
+            : "Your location could not be determined. Enter an ICAO code manually."
+        );
+      },
+      { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 }
+    );
+  }
 
   function toggleExercise(ex: string) {
     setExercises((prev) => prev.includes(ex) ? prev.filter((e) => e !== ex) : [...prev, ex]);
@@ -450,9 +501,80 @@ export default function Preflight() {
     };
   }
 
+  const sectionSwitcher = (
+    <div className="flex w-full flex-col gap-3">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1f6bf5]">Pre-flight workspace</p>
+        <h1 className="mt-1 text-xl font-bold text-[#0f2a5c]">Plan your flight</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Plan your flight, get the briefing and save it for your record.
+        </p>
+      </div>
+      <div role="tablist" aria-label="Pre-flight sections" className="grid w-full gap-3 sm:grid-cols-2 lg:gap-4">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === "briefing"}
+          onClick={() => setActiveSection("briefing")}
+          className={`flex h-full min-h-[88px] items-start gap-3 rounded-xl border px-4 py-3 text-left transition ${
+            activeSection === "briefing"
+              ? "border-[#1f6bf5] bg-white shadow-[0_2px_12px_rgba(31,80,170,0.09)]"
+              : "border-[#d6e3f6] bg-white/60 hover:bg-white"
+          }`}
+        >
+          <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${activeSection === "briefing" ? "bg-[#e3eeff] text-[#1f6bf5]" : "bg-slate-100 text-slate-500"}`}>
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-[#0f2a5c]">Flight Briefing</span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">Enter your flight details and generate the briefing package.</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === "aviation"}
+          onClick={() => setActiveSection("aviation")}
+          className={`flex h-full min-h-[88px] items-start gap-3 rounded-xl border px-4 py-3 text-left transition ${
+            activeSection === "aviation"
+              ? "border-[#1f6bf5] bg-white shadow-[0_2px_12px_rgba(31,80,170,0.09)]"
+              : "border-[#d6e3f6] bg-white/60 hover:bg-white"
+          }`}
+        >
+          <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${activeSection === "aviation" ? "bg-[#e3eeff] text-[#1f6bf5]" : "bg-slate-100 text-slate-500"}`}>
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-[#0f2a5c]">Aviation Information</span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">Check live airport weather, NOTAMs, charts and official sources.</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+
   if (!started) {
     return (
-      <div className="flex max-w-2xl flex-col gap-5">
+      <div className="flex w-full max-w-[1180px] flex-col gap-5">
+        {sectionSwitcher}
+        <div className={activeSection === "aviation" ? "" : "hidden"}>
+          <PreflightAviation
+            departure={departure}
+            destination={destination}
+            route={route}
+            rules={rules}
+            onSelectAirport={selectAirport}
+            onUseLocation={useMyLocation}
+            nearest={nearestAirport}
+            locating={locating}
+            locationError={locationError}
+          />
+        </div>
+        <div
+          role="tabpanel"
+          aria-hidden={activeSection !== "briefing"}
+          className={activeSection === "briefing" ? "flex max-w-2xl flex-col gap-5" : "hidden"}
+        >
         <p className="text-sm text-muted-foreground">
           Fill in your flight details below. Runway surface and controlled status are never assumed — you must confirm them explicitly.
         </p>
@@ -563,7 +685,19 @@ export default function Preflight() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label>Departure airport (ICAO)</Label>
-            <Input value={departure} onChange={(e) => setDeparture(e.target.value.toUpperCase())} placeholder="KSQL" />
+            <Input value={departure} onChange={(e) => setDepartureManually(e.target.value)} placeholder="KSQL" />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={useMyLocation} disabled={locating}>
+                {locating ? "Locating…" : "Use my location"}
+              </Button>
+              <span className="text-[11px] text-muted-foreground">Fills the nearest reporting airport.</span>
+            </div>
+            {nearestAirport?.icao && nearestAirport.icao === departure.trim().toUpperCase() && nearestAirport.distance_km != null && (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {nearestAirport.icao} · {nearestAirport.distance_km} km away. Verify the airport before continuing.
+              </p>
+            )}
+            {locationError && <p className="mt-2 text-[11px] text-destructive">{locationError}</p>}
           </div>
           <div>
             <Label>Destination (optional)</Label>
@@ -849,13 +983,33 @@ export default function Preflight() {
         <Button onClick={submit} disabled={!canSubmit}>
           Generate pre-flight package
         </Button>
+        </div>
       </div>
     );
   }
 
   // Report view — rendered during AND after generation (progressive sections)
   return (
-    <div className="flex max-w-3xl flex-col gap-5">
+    <div className="flex w-full max-w-[1180px] flex-col gap-5">
+      {sectionSwitcher}
+      <div className={activeSection === "aviation" ? "" : "hidden"}>
+        <PreflightAviation
+          departure={departure}
+          destination={destination}
+          route={route}
+          rules={rules}
+          onSelectAirport={selectAirport}
+          onUseLocation={useMyLocation}
+          nearest={nearestAirport}
+          locating={locating}
+          locationError={locationError}
+        />
+      </div>
+      <div
+        role="tabpanel"
+        aria-hidden={activeSection !== "briefing"}
+        className={activeSection === "briefing" ? "flex max-w-3xl flex-col gap-5" : "hidden"}
+      >
       <BriefingReport
         sections={sections}
         pendingSectionIds={pendingSectionIds}
@@ -895,6 +1049,7 @@ export default function Preflight() {
         <Button variant="outline" size="sm" onClick={() => { setStarted(false); resetBriefingState(); }}>
           Edit details
         </Button>
+      </div>
       </div>
     </div>
   );

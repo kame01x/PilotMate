@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import ThemeToggle from "@/components/ThemeToggle";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import Shell, { ADMIN_ITEMS } from "@/components/Shell";
 
 interface StudentRow {
   id: number;
@@ -112,6 +112,10 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAuthorized(ok);
     if (!ok) router.push("/login?role=admin");
+    const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    if (requestedTab && ADMIN_ITEMS.some((item) => item.id === requestedTab)) {
+      setTab(requestedTab);
+    }
   }, [router]);
 
   const loadAll = useCallback(async () => {
@@ -236,19 +240,11 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col gap-4 p-4 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold sm:text-2xl">PilotMate Admin</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>Dashboard</Button>
-          <Button variant="ghost" size="sm" onClick={logout}>Log out</Button>
-          <ThemeToggle />
-        </div>
-      </div>
+    <Shell items={ADMIN_ITEMS} active={tab} onSelect={setTab} onLogout={logout} contentClassName="p-4 sm:p-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <h1 className="text-xl font-bold sm:text-2xl">PilotMate Admin</h1>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
       {notice && <p className="text-sm text-green-600 dark:text-green-400">{notice}</p>}
 
       {loading ? (
@@ -260,13 +256,6 @@ export default function AdminPage() {
         </CardContent></Card>
       ) : (
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
-            <TabsTrigger value="health">System health</TabsTrigger>
-          </TabsList>
-
           <TabsContent value="overview">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {[
@@ -550,6 +539,7 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       )}
-    </div>
+      </div>
+    </Shell>
   );
 }

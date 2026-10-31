@@ -1,10 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import ThemeToggle from "@/components/ThemeToggle";
-import MusicPlayer from "@/components/music/MusicPlayer";
-
 export interface SidebarListItem {
   id: string;
   label: string;
@@ -15,30 +10,24 @@ export default function SidebarList({
   items,
   selectedId,
   onSelect,
-  actionLabel = "Main menu",
-  actionHref = "/dashboard",
 }: {
   title: string;
   items: SidebarListItem[];
   selectedId: string | null;
   onSelect: (item: SidebarListItem) => void;
-  actionLabel?: string;
-  actionHref?: string;
 }) {
-  const router = useRouter();
   return (
     <aside className="flex w-full flex-col gap-3 overflow-y-auto border-b border-sidebar-border bg-card p-4 sm:h-full sm:w-64 sm:flex-shrink-0 sm:border-b-0 sm:border-r">
-      <div className="mb-2 flex items-center justify-between px-2">
+      <div className="mb-2 px-2">
         <h2 className="text-lg font-bold text-sidebar-foreground">{title}</h2>
-          <ThemeToggle />
-        </div>
-        <MusicPlayer />
-
-        <div className="flex flex-row gap-1 overflow-x-auto sm:flex-col sm:overflow-x-visible">
+      </div>
+      <div className="flex flex-row gap-1 overflow-x-auto sm:flex-col sm:overflow-x-visible" aria-label="Exam sections">
         {items.map((item) => (
           <button
             key={item.id}
+            type="button"
             onClick={() => onSelect(item)}
+            aria-current={selectedId === item.id ? "page" : undefined}
             className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm transition-colors ${
               selectedId === item.id
                 ? "border-l-2 border-primary bg-primary/10 text-primary"
@@ -48,13 +37,6 @@ export default function SidebarList({
             {item.label}
           </button>
         ))}
-      </div>
-
-      <div className="mt-auto border-t pt-3">
-        <Button variant="outline" size="sm" onClick={() => router.push(actionHref)}>
-          <svg viewBox="0 0 24 24" className="mr-1 inline h-4 w-4 fill-none stroke-current" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-          {actionLabel}
-        </Button>
       </div>
     </aside>
   );

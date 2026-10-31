@@ -4,7 +4,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from agents.instructor import get_conversation
@@ -15,12 +17,33 @@ from backend.api.sessions import get_debrief_agent, get_preflight_agent, get_rou
 from backend.config import RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW
 from backend.database import SessionLocal
 from backend.models import Debrief, Flight, Instructor, Student
+from backend.profile_photos import (
+    MAX_PROFILE_PHOTO_BYTES,
+    profile_photo_exists,
+    read_profile_photo,
+    save_profile_photo,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/student", tags=["student"])
 
 _ai_limit = rate_limit(RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW)
+
+
+def _dashboard_flight(flight: Flight, debriefed: bool) -> dict:
+    return {
+        "id": flight.id,
+        "flight_id": flight.flight_id,
+        "date": flight.date.isoformat() if flight.date else None,
+        "departure_airport": flight.departure_airport,
+        "destination_airport": flight.destination_airport,
+        "route": flight.route,
+        "aircraft_type": flight.aircraft_type,
+        "exercise_type": flight.exercise_type,
+        "flight_rules": flight.flight_rules,
+        "debriefed": debriefed,
+    }
 
 
 class ChatMessage(BaseModel):
@@ -115,6 +138,55 @@ def my_flights(student: Student = Depends(get_current_student)):
         session.close()
 
 
+@router.get("/dashboard-summary")
+def dashboard_summary(student: Student = Depends(get_current_student)):
+    session = SessionLocal()
+    try:
+        flights = (
+            session.query(Flight)
+            .filter_by(student_id=student.id)
+            .order_by(Flight.date.desc(), Flight.id.desc())
+            .all()
+        )
+        debriefs = session.query(Debrief).filter_by(student_id=student.id).all()
+        linked_instructor = None
+        if student.linked_instructor_id is not None:
+            row = session.query(Instructor).filter_by(id=student.linked_instructor_id).first()
+            if row is not None:
+                linked_instructor = {"instructor_id": row.instructor_id, "name": row.name}
+    finally:
+        session.close()
+
+    debriefed_ids = {row.flight_id for row in debriefs}
+    completed = sum(1 for flight in flights if flight.id in debriefed_ids)
+    total = len(flights)
+    now = datetime.now(timezone.utc)
+    this_month = sum(
+        1
+        for flight in flights
+        if flight.date and flight.date.year == now.year and flight.date.month == now.month
+    )
+
+    return {
+        "student_id": student.student_id,
+        "name": student.name,
+        "linked_instructor": linked_instructor,
+        "flights": {
+            "total": total,
+            "this_month": this_month,
+            "last_flight": _dashboard_flight(flights[0], flights[0].id in debriefed_ids) if flights else None,
+        },
+        "training": {
+            "flights_total": total,
+            "debriefs_completed": completed,
+            "percent": round((completed / total) * 100) if total else 0,
+        },
+        "recent_flights": [
+            _dashboard_flight(flight, flight.id in debriefed_ids) for flight in flights[:5]
+        ],
+    }
+
+
 @router.get("/library")
 def library_access(student: Student = Depends(get_current_student)):
     from backend.documents import get_library_reference
@@ -150,6 +222,62 @@ def me(student: Student = Depends(require_student_access)) -> dict:
         "student_id": student.student_id,
         "name": student.name,
         "linked_instructor": instructor,
+    }
+
+
+@router.get("/profile")
+def profile(student: Student = Depends(get_current_student)) -> dict:
+    """Sidebar identity for every authenticated student, including students who
+    have not subscribed yet. Only the student's own public identity is returned."""
+    return {
+        "student_id": student.student_id,
+        "name": student.name,
+        "has_photo": profile_photo_exists(student.student_id),
+    }
+
+
+@router.get("/profile/photo")
+def profile_photo(student: Student = Depends(get_current_student)) -> Response:
+    photo = read_profile_photo(student.student_id)
+    if photo is None:
+        raise HTTPException(404, "No profile photo set")
+    data, media_type = photo
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
+
+
+@router.put("/profile/photo")
+async def upload_profile_photo(
+    request: Request,
+    student: Student = Depends(get_current_student),
+) -> dict:
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared_length = int(content_length)
+        except ValueError:
+            raise HTTPException(400, "Invalid Content-Length header.")
+        if declared_length > MAX_PROFILE_PHOTO_BYTES:
+            raise HTTPException(413, "Profile photos must be 2 MB or smaller.")
+
+    data = await request.body()
+    media_type = save_profile_photo(
+        student.student_id,
+        data,
+        request.headers.get("content-type"),
+    )
+    return {
+        "ok": True,
+        "has_photo": True,
+        "media_type": media_type,
+        "message": "Profile photo saved.",
     }
 
 

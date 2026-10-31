@@ -53,6 +53,14 @@ def _instructor_pk(instructor: Instructor) -> int:
         session.close()
 
 
+@router.get("/me")
+def me(instructor: Instructor = Depends(get_current_instructor)) -> dict:
+    return {
+        "instructor_id": instructor.instructor_id,
+        "name": instructor.name,
+    }
+
+
 @router.get("/students")
 def linked_students(instructor: Instructor = Depends(get_current_instructor)):
     session = SessionLocal()

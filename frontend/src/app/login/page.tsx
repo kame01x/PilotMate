@@ -118,6 +118,15 @@ function LoginForm() {
           Create an account
         </button>
       </p>
+      <div className="mt-4 text-center">
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="text-[clamp(11px,3.2cqw,14px)] font-medium text-[#8AA4BE] transition-colors hover:text-[#07315A] focus-visible:ring-2 focus-visible:ring-[#2585CF]/40 focus-visible:outline-none"
+        >
+          Main menu
+        </button>
+      </div>
     </AuthShell>
   );
 }

@@ -38,12 +38,26 @@ export function PilotMateLogo({ className = "" }: { className?: string }) {
  * Shared login/signup layout from the approved design: full-viewport
  * daylight cockpit photograph with the translucent glass panel at the
  * reference position — 33.4% wide, 4.1% from the right edge, vertically
- * centered. Collapses to a full-width card on small screens.
+ * centered. Collapses to a full-width card on small screens. Sign-up
+ * overrides the horizontal placement via the optional `className`.
  */
-export default function AuthShell({ children }: { children: React.ReactNode }) {
+export default function AuthShell({
+  children,
+  className,
+  backdropClassName,
+  containerClassName,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  backdropClassName?: string;
+  containerClassName?: string;
+}) {
+  const defaultContainer = `items-center justify-center py-10 sm:px-6 ${className ?? "lg:justify-end lg:pr-[4.1vw]"}`;
+  const containerClasses = `flex w-full px-4 ${containerClassName ?? defaultContainer}`;
+
   return (
-    <main className="cockpit-backdrop relative flex min-h-screen items-stretch">
-      <div className="flex w-full items-center justify-center px-4 py-10 sm:px-6 lg:justify-end lg:pr-[4.1vw]">
+    <main className={`relative flex min-h-[100dvh] items-center ${backdropClassName ?? "cockpit-backdrop"}`}>
+      <div className={containerClasses}>
         <div className="w-full max-w-[600px] lg:w-[33.4vw] lg:min-w-[360px] [container-type:inline-size]">
           <div className="auth-glass rounded-[clamp(16px,1.6vw,26px)] px-[clamp(24px,9.4cqw,56px)] pt-[clamp(28px,10.3cqw,60px)] pb-[clamp(30px,11.3cqw,66px)]">
             <PilotMateLogo className="mb-[clamp(16px,7.6cqw,44px)]" />

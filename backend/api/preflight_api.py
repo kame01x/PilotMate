@@ -14,9 +14,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import json
 import logging
+import math
+import re
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -29,6 +32,13 @@ from backend.config import RATE_LIMIT_AI_REQUESTS, RATE_LIMIT_AI_WINDOW
 from backend.models import Flight, Student
 from backend.database import SessionLocal
 from backend.preflight.contracts import BriefingRequest
+from backend.preflight.data import (
+    AWC_METAR_URL,
+    fetch_airport_info,
+    fetch_metar_taf,
+    fetch_notams,
+    resolve_country_and_ais,
+)
 from backend.preflight.orchestrator import (
     build_result_text,
     request_cancel,
@@ -332,3 +342,175 @@ def suggest_route(body: dict, student: Student = Depends(require_student_access)
         "notice": chat.last_notice,
         "verification_required": True,
     }
+
+class PreflightNotamBody(BaseModel):
+    icao: str
+
+
+_ICAO_RE = re.compile(r"^[A-Z0-9]{3,5}$")
+_AWC_AIRPORT_URL = "https://aviationweather.gov/api/data/airport"
+
+
+def _preflight_icao(value: str) -> str:
+    icao = (value or "").strip().upper()
+    if not _ICAO_RE.match(icao):
+        raise HTTPException(400, "Enter a valid ICAO airport code (3-5 letters/digits).")
+    return icao
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    radius = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+async def _awc_airport(client: httpx.AsyncClient, icao: str) -> dict | None:
+    try:
+        resp = await client.get(_AWC_AIRPORT_URL, params={"ids": icao, "format": "json"})
+        if resp.status_code != 200:
+            return None
+        payload = resp.json()
+        if isinstance(payload, list) and payload:
+            return payload[0] if isinstance(payload[0], dict) else None
+    except Exception:  # noqa: BLE001 - best-effort enrichment; never fail the lookup
+        return None
+    return None
+
+
+@router.get("/preflight/weather/{icao}")
+async def preflight_weather(icao: str, student: Student = Depends(require_student_access)):
+    """On-demand METAR/TAF from the existing aviationweather.gov tool."""
+    code = _preflight_icao(icao)
+    try:
+        async with httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "PilotMate/1.0"}) as client:
+            result = await fetch_metar_taf(client, code)
+    except Exception as exc:  # noqa: BLE001 - explicit unavailable state
+        logger.warning("Pre-flight weather lookup failed for %s: %s", code, exc)
+        return {"tool": "metar_taf", "ok": False, "data": {"icao": code}, "error": str(exc)}
+    return result.as_dict()
+
+
+@router.post("/preflight/notams")
+async def preflight_notams(
+    body: PreflightNotamBody,
+    student: Student = Depends(require_student_access),
+    _: None = Depends(_ai_limit),
+):
+    """On-demand NOTAM search using the existing official-source workflow."""
+    code = _preflight_icao(body.icao)
+    try:
+        async with httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "PilotMate/1.0"}) as client:
+            result = await fetch_notams(client, code)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Pre-flight NOTAM lookup failed for %s: %s", code, exc)
+        return {"tool": "notams", "ok": False, "data": {"icao": code}, "error": str(exc)}
+    return result.as_dict()
+
+
+@router.get("/preflight/airport/{icao}")
+async def preflight_airport(icao: str, student: Student = Depends(require_student_access)):
+    """Airport record from AvioWiki plus runway data from aviationweather.gov."""
+    code = _preflight_icao(icao)
+    country, official_sources = resolve_country_and_ais(code)
+    error = None
+    airport = None
+    awc = None
+    try:
+        async with httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "PilotMate/1.0"}) as client:
+            airport, error = await fetch_airport_info(client, code)
+            awc = await _awc_airport(client, code)
+    except Exception as exc:  # noqa: BLE001
+        error = str(exc)
+    return {
+        "ok": error is None and (airport is not None or awc is not None),
+        "data": {
+            "icao": code,
+            "airport": airport,
+            "directory": awc,
+            "country": country,
+            "official_sources": official_sources,
+            "sources": ["aviowiki.com", "aviationweather.gov"],
+        },
+        "error": error if error else (None if airport or awc else f"No airport record found for {code}."),
+        "fetched_at": datetime.now().astimezone().isoformat(),
+    }
+
+
+@router.get("/preflight/nearest-airport")
+async def preflight_nearest_airport(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    student: Student = Depends(require_student_access),
+):
+    """Nearest reporting airport for a browser geolocation fix.
+
+    Uses the existing aviationweather.gov station feed, then enriches with the
+    airport directory. Precise coordinates are used for this request only and
+    are never persisted by the backend.
+    """
+    radius = 0.75
+    bbox = f"{lat - radius},{lon - radius},{lat + radius},{lon + radius}"
+    try:
+        async with httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "PilotMate/1.0"}) as client:
+            resp = await client.get(AWC_METAR_URL, params={"bbox": bbox, "format": "json"})
+            if resp.status_code != 200:
+                return {
+                    "ok": False,
+                    "error": f"Airport lookup failed (HTTP {resp.status_code}).",
+                    "data": None,
+                }
+            stations = resp.json()
+            if not isinstance(stations, list) or not stations:
+                return {
+                    "ok": False,
+                    "error": "No reporting airport was found near this location. Enter an ICAO code manually.",
+                    "data": None,
+                }
+            candidates = []
+            for station in stations:
+                if not isinstance(station, dict):
+                    continue
+                station_lat = station.get("lat")
+                station_lon = station.get("lon")
+                station_icao = str(station.get("icaoId") or "").strip().upper()
+                if station_lat is None or station_lon is None or not _ICAO_RE.match(station_icao):
+                    continue
+                candidates.append(
+                    (
+                        _haversine_km(lat, lon, float(station_lat), float(station_lon)),
+                        station_icao,
+                        station,
+                    )
+                )
+            if not candidates:
+                return {
+                    "ok": False,
+                    "error": "No reporting airport was found near this location. Enter an ICAO code manually.",
+                    "data": None,
+                }
+            distance, icao, station = min(candidates, key=lambda item: item[0])
+            directory = await _awc_airport(client, icao)
+            country, official_sources = resolve_country_and_ais(icao)
+            return {
+                "ok": True,
+                "error": None,
+                "data": {
+                    "icao": icao,
+                    "name": station.get("name") or (directory or {}).get("name"),
+                    "country": country,
+                    "distance_km": round(distance, 1),
+                    "latitude": station.get("lat"),
+                    "longitude": station.get("lon"),
+                    "observed_at": station.get("reportTime"),
+                    "metar": station.get("rawOb"),
+                    "directory": directory,
+                    "official_sources": official_sources,
+                    "source": "aviationweather.gov",
+                },
+            }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Nearest-airport lookup failed at %s,%s: %s", lat, lon, exc)
+        return {"ok": False, "error": f"Airport lookup failed: {exc}", "data": None}

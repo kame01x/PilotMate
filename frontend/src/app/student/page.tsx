@@ -25,6 +25,10 @@ export default function StudentPage() {
     // first client render match, instead of reading localStorage during render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRoleState(r);
+    const requestedView = new URLSearchParams(window.location.search).get("view");
+    if (requestedView && STUDENT_ITEMS.some((item) => item.id === requestedView)) {
+      setView(requestedView);
+    }
     if (studentRouteAccess(token, r) === "login") router.push("/login?role=student");
   }, [router]);
 
@@ -71,18 +75,20 @@ export default function StudentPage() {
   }
 
   return (
-    <Shell title="Student" items={STUDENT_ITEMS} active={view} onSelect={setView} onLogout={logout}>
-      <div className={view === "technical" || view === "debrief" ? "hidden" : ""}>
-        <div className="mx-auto w-full max-w-3xl">
-          <div className={view === "dashboard" ? "" : "hidden"} key={view}><StudentDashboard /></div>
-          <div className={view === "preflight" ? "" : "hidden"}><Preflight /></div>
-          <div className={view === "billing" ? "" : "hidden"}><Billing /></div>
+    <div className={`student-workspace-bg h-screen ${view === "dashboard" ? "student-dashboard-view" : ""}`}>
+      <Shell items={STUDENT_ITEMS} active={view} onSelect={setView} onLogout={logout}>
+        <div className={view === "technical" || view === "debrief" ? "hidden" : ""}>
+          <div className={view === "dashboard" || view === "preflight" ? "mx-auto w-full max-w-6xl" : "mx-auto w-full max-w-3xl"}>
+            <div className={view === "dashboard" ? "" : "hidden"} key={view}><StudentDashboard /></div>
+            <div className={view === "preflight" ? "" : "hidden"}><Preflight /></div>
+            <div className={view === "billing" ? "" : "hidden"}><Billing /></div>
+          </div>
         </div>
-      </div>
-      <div data-pattern={view === "technical" ? "low" : undefined} className={view === "technical" || view === "debrief" ? "flex min-h-0 min-w-0 flex-1 flex-col" : "hidden"}>
-        <div className={view === "technical" ? "flex min-h-0 flex-1" : "hidden"}><Technical /></div>
-        <div className={view === "debrief" ? "flex min-h-0 flex-1" : "hidden"} key={view}><Debrief /></div>
-      </div>
-    </Shell>
+        <div data-pattern={view === "technical" ? "low" : undefined} className={view === "technical" || view === "debrief" ? "flex min-h-0 min-w-0 flex-1 flex-col" : "hidden"}>
+          <div className={view === "technical" ? "flex min-h-0 flex-1" : "hidden"}><Technical /></div>
+          <div className={view === "debrief" ? "flex min-h-0 flex-1" : "hidden"} key={view}><Debrief /></div>
+        </div>
+      </Shell>
+    </div>
   );
 }

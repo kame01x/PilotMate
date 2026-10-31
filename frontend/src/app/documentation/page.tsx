@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getRole, getToken } from "@/lib/api";
+import { getRole, getToken, setRole, setToken } from "@/lib/api";
 import { canUseLearningLibrary } from "@/lib/roles";
 import Library from "@/components/student/Library";
-import PageHeader from "@/components/PageHeader";
+import Shell, { itemsWithHrefs } from "@/components/Shell";
 import RoleGate from "@/components/RoleGate";
 
 export default function DocumentationPage() {
@@ -21,6 +21,12 @@ export default function DocumentationPage() {
     setRoleState(r ?? "guest");
     if (!token || !r) router.push("/login?role=student");
   }, [router]);
+
+  function logout() {
+    setToken(null);
+    setRole(null);
+    router.push("/");
+  }
 
   // Nothing role-specific renders until the stored session is read.
   if (role === null) {
@@ -48,11 +54,13 @@ export default function DocumentationPage() {
   }
 
   return (
-    <div data-pattern="low" className="flex min-h-screen flex-col items-center p-8">
-      <div className="w-full max-w-3xl">
-        <PageHeader title="Documentation" />
-        <Library />
+    <Shell items={itemsWithHrefs(role)} active="" onLogout={logout}>
+      <div data-pattern="low" className="flex flex-1 flex-col items-center">
+        <div className="w-full max-w-3xl">
+          <h1 className="mb-6 text-2xl font-bold">Documentation</h1>
+          <Library />
+        </div>
       </div>
-    </div>
+    </Shell>
   );
 }

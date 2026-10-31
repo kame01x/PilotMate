@@ -80,6 +80,14 @@ def _audit(admin_id: int, action: str, target_id: int | None = None,
         session.close()
 
 
+@router.get("/me")
+def me(admin: AdminUser = Depends(lambda payload=Depends(get_payload): _require_admin(payload))) -> dict:
+    return {
+        "name": admin.name,
+        "email": admin.email,
+    }
+
+
 @router.post("/invites")
 def create_invite(body: InviteBody, admin: AdminUser = Depends(lambda payload=Depends(get_payload): _require_admin(payload))):
     code = secrets.token_urlsafe(32)

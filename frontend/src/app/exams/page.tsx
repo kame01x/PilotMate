@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getRole, getToken, apiFetch } from "@/lib/api";
+import { getRole, getToken, setRole, setToken, apiFetch } from "@/lib/api";
 import { canUseLearningLibrary } from "@/lib/roles";
 import SidebarList, { type SidebarListItem } from "@/components/student/SidebarList";
+import Shell, { itemsWithHrefs } from "@/components/Shell";
 import ExamPrep from "@/components/student/ExamPrep";
 import RoleGate from "@/components/RoleGate";
 
@@ -33,6 +34,12 @@ export default function ExamsPage() {
     setRoleState(r ?? "guest");
     if (!token || !r) router.push("/login?role=student");
   }, [router]);
+
+  function logout() {
+    setToken(null);
+    setRole(null);
+    router.push("/");
+  }
 
   // Fetch sections only for a role that may use them — never with an admin or
   // unknown token (the backend would answer 403).
@@ -75,16 +82,18 @@ export default function ExamsPage() {
   const items: SidebarListItem[] = sections.map((s) => ({ id: s, label: s }));
 
   return (
-    <div className="flex h-screen flex-col sm:flex-row">
-      <SidebarList
-        title="Exam Prep"
-        items={items}
-        selectedId={selected}
-        onSelect={(item) => setSelected(item.id)}
-      />
-      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-8 pl-8 pr-4">
-        <ExamPrep selected={selected} />
-      </main>
-    </div>
+    <Shell items={itemsWithHrefs(role)} active="" onLogout={logout} contentClassName="p-0">
+      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+        <SidebarList
+          title="Exam Prep"
+          items={items}
+          selectedId={selected}
+          onSelect={(item) => setSelected(item.id)}
+        />
+        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto p-6 sm:p-8">
+          <ExamPrep selected={selected} />
+        </div>
+      </div>
+    </Shell>
   );
 }
