@@ -195,7 +195,7 @@ export default function TechnicalSidebar({ selected, onSelect, customExercises, 
       )}
 
       {showCustom && (
-        <div className="mt-3 flex gap-2 border-t pt-3" style={{ borderColor: "#eaf0fa" }}>
+        <div className="mt-3 flex gap-2 border-t pt-3" style={{ borderColor: "#eaf0fa", maxHeight: "200px", overflow: "hidden" }}>
           <label htmlFor="custom-exercise" className="sr-only">
             Add a custom exercise
           </label>
