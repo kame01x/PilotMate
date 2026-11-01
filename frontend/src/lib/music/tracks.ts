@@ -4,15 +4,14 @@ export interface Track {
   src: string;
 }
 
-/** Royalty-free study tracks. Files live in frontend/public/audio/ (gitignored). */
 export const TRACKS: Track[] = [
-  { id: "lofi-study", title: "Lo-fi Study", src: "/audio/lofi-study.mp3" },
-  { id: "ambient-focus", title: "Ambient Focus", src: "/audio/ambient-focus.mp3" },
-  { id: "soft-acoustic", title: "Soft Acoustic", src: "/audio/soft-acoustic.mp3" },
-  { id: "calm-piano", title: "Calm Piano", src: "/audio/calm-piano.mp3" },
+  { id: "ambient-focus", title: "Ambient Focus", src: "https://res.cloudinary.com/h6rnryza/video/upload/v1793506700/ambient-focus.mp3" },
+  { id: "calm-piano", title: "Calm Piano", src: "https://res.cloudinary.com/h6rnryza/video/upload/v1793507186/calm-piano.mp3" },
+  { id: "lofi-study", title: "Lo-fi Study", src: "https://res.cloudinary.com/h6rnryza/video/upload/v1793538299/lofi-study.mp3" },
+  { id: "soft-acoustic", title: "Soft Acoustic", src: "https://res.cloudinary.com/h6rnryza/video/upload/v1793506577/soft-acoustic.mp3" },
 ];
 
-export const DEFAULT_TRACK_ID = "lofi-study";
+export const DEFAULT_TRACK_ID = "ambient-focus";
 
 export function trackById(id: string): Track {
   return TRACKS.find((t) => t.id === id) ?? TRACKS.find((t) => t.id === DEFAULT_TRACK_ID) ?? TRACKS[0];
